@@ -1,3 +1,7 @@
-pub mod chunks;
-pub mod decoder;
-pub mod png;
+mod chunks;
+mod crc;
+mod decoder;
+mod filters;
+mod png;
+
+pub use png::*;

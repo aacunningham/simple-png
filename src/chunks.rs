@@ -4,7 +4,7 @@ use nom::{bytes::complete::take, number::complete::be_u32, sequence::tuple, IRes
 #[derive(Debug)]
 pub enum Chunk<'a> {
     IHDR(ihdr::IHDRChunk),
-    IDAT(idat::IDATChunk<'a>),
+    IDAT(idat::IDATChunk<&'a [u8]>),
     IEND,
     pHYs(phys::pHYsChunk),
     Unknown(RawChunk<'a>),
@@ -23,15 +23,15 @@ pub fn parse_chunk(input: &[u8]) -> IResult<&[u8], Chunk<'_>> {
     if let Ok((input, _)) = iend::parse_chunk(input) {
         return Ok((input, Chunk::IEND));
     }
-    let (input, (length, raw_chunk_type)) = tuple((be_u32, take(4u32)))(input)?;
-    let (input, (chunk_data, raw_crc)) = tuple((take(length), take(4u32)))(input)?;
+    let (input, (_length, raw_chunk_type)) = tuple((be_u32, take(4u32)))(input)?;
+    let (input, (_chunk_data, raw_crc)) = tuple((take(_length), take(4u32)))(input)?;
     Ok((
         input,
         Chunk::Unknown(RawChunk {
-            length,
-            chunk_type: raw_chunk_type.try_into().unwrap(),
-            chunk_data,
-            crc: raw_crc.try_into().unwrap(),
+            _length,
+            _chunk_type: raw_chunk_type.try_into().unwrap(),
+            _chunk_data,
+            _crc: raw_crc.try_into().unwrap(),
         }),
     ))
 }
@@ -65,34 +65,38 @@ impl<'a> Iterator for ChunkIter<'a> {
 
 #[derive(Debug)]
 pub struct RawChunk<'a> {
-    length: u32,
-    chunk_type: &'a [u8; 4],
-    chunk_data: &'a [u8],
-    crc: &'a [u8; 4],
+    _length: u32,
+    _chunk_type: &'a [u8; 4],
+    _chunk_data: &'a [u8],
+    _crc: &'a [u8; 4],
 }
 
 pub mod ihdr {
     use nom::{
         bytes::complete::{tag, take},
+        number::complete::be_u32,
         sequence::{delimited, tuple},
         IResult,
     };
 
+    use crate::crc::calculate_crc;
+
     pub const HEADER: &[u8; 4] = b"IHDR";
 
-    #[derive(Debug)]
+    #[derive(Debug, Default)]
     pub struct IHDRChunk {
         pub width: u32,
         pub height: u32,
-        bit_depth: u8,
-        color_type: ColorType,
-        compression_method: u8,
-        filter_method: u8,
-        interlace_method: u8,
+        pub bit_depth: u8,
+        pub color_type: ColorType,
+        pub compression_method: u8,
+        pub filter_method: u8,
+        pub interlace_method: u8,
     }
 
-    #[derive(Debug)]
-    enum ColorType {
+    #[derive(Debug, Default, Clone, Copy)]
+    pub enum ColorType {
+        #[default]
         Greyscale = 0,
         Truecolor = 2,
         IndexedColor = 3,
@@ -113,31 +117,47 @@ pub mod ihdr {
     }
 
     pub fn parse_chunk(input: &[u8]) -> IResult<&[u8], IHDRChunk> {
-        let (input, chunk_data) = delimited(
+        let (input, (width, height, chunk_data)) = delimited(
             tuple((tag([0, 0, 0, 13]), tag(HEADER))),
-            take(13u32),
+            tuple((be_u32, be_u32, take(5u32))),
             take(4u32),
         )(input)?;
-        let width = u32::from_be_bytes(*TryInto::<&[u8; 4]>::try_into(&chunk_data[0..4]).unwrap());
-        let height = u32::from_be_bytes(*TryInto::<&[u8; 4]>::try_into(&chunk_data[4..8]).unwrap());
         Ok((
             input,
             IHDRChunk {
                 width,
                 height,
-                bit_depth: chunk_data[8],
-                color_type: chunk_data[9].into(),
-                compression_method: chunk_data[10],
-                filter_method: chunk_data[11],
-                interlace_method: chunk_data[12],
+                bit_depth: chunk_data[0],
+                color_type: chunk_data[1].into(),
+                compression_method: chunk_data[2],
+                filter_method: chunk_data[3],
+                interlace_method: chunk_data[4],
             },
         ))
+    }
+
+    impl IHDRChunk {
+        pub fn to_bytes(&self) -> Vec<u8> {
+            let mut bytes = vec![0, 0, 0, 13];
+            bytes.extend(HEADER);
+            bytes.extend(&self.width.to_be_bytes());
+            bytes.extend(&self.height.to_be_bytes());
+            bytes.push(self.bit_depth);
+            bytes.push(self.color_type as u8);
+            bytes.push(self.compression_method);
+            bytes.push(self.filter_method);
+            bytes.push(self.interlace_method);
+            let crc = calculate_crc(bytes[8..].iter().copied()).to_be_bytes();
+            bytes.extend(crc);
+            bytes
+        }
     }
 }
 
 mod phys {
     use nom::{
         bytes::complete::{tag, take},
+        number::complete::{be_u32, u8},
         sequence::{delimited, tuple},
         IResult,
     };
@@ -147,9 +167,9 @@ mod phys {
     #[allow(non_camel_case_types)]
     #[derive(Debug)]
     pub struct pHYsChunk {
-        x_axis_ppu: u32,
-        y_axis_ppu: u32,
-        unit_specifier: Unit,
+        _x_axis_ppu: u32,
+        _y_axis_ppu: u32,
+        _unit_specifier: u8,
     }
 
     #[derive(Debug)]
@@ -168,27 +188,24 @@ mod phys {
     }
 
     pub fn parse_chunk(input: &[u8]) -> IResult<&[u8], pHYsChunk> {
-        let (input, chunk_data) = delimited(
+        let (input, (_x_axis_ppu, _y_axis_ppu, _unit_specifier)) = delimited(
             tuple((tag([0, 0, 0, 9]), tag(HEADER))),
-            take(9u32),
+            tuple((be_u32, be_u32, u8)),
             take(4u32),
         )(input)?;
-        let x_axis_ppu =
-            u32::from_be_bytes(*TryInto::<&[u8; 4]>::try_into(&chunk_data[0..4]).unwrap());
-        let y_axis_ppu =
-            u32::from_be_bytes(*TryInto::<&[u8; 4]>::try_into(&chunk_data[4..8]).unwrap());
         Ok((
             input,
             pHYsChunk {
-                x_axis_ppu,
-                y_axis_ppu,
-                unit_specifier: chunk_data[8].into(),
+                _x_axis_ppu,
+                _y_axis_ppu,
+                _unit_specifier: _unit_specifier.into(),
             },
         ))
     }
 }
 
 pub mod idat {
+    use miniz_oxide::deflate::compress_to_vec_zlib;
     use miniz_oxide::inflate::decompress_to_vec_zlib;
     use nom::{
         bytes::complete::{tag, take},
@@ -197,19 +214,40 @@ pub mod idat {
         IResult,
     };
 
+    use crate::crc::calculate_crc;
+
     pub const HEADER: &[u8; 4] = b"IDAT";
 
     #[derive(Debug)]
-    pub struct IDATChunk<'a> {
-        data: &'a [u8],
+    pub struct IDATChunk<T> {
+        data: T,
     }
-    impl IDATChunk<'_> {
+    impl<'a, T> IDATChunk<T>
+    where
+        T: AsRef<[u8]>,
+    {
         pub fn decode_data(&self) -> Vec<u8> {
-            decompress_to_vec_zlib(self.data).unwrap()
+            decompress_to_vec_zlib(self.data.as_ref()).unwrap()
+        }
+        pub fn to_bytes(self) -> Vec<u8> {
+            let len = self.data.as_ref().len() as u32;
+            let crc = calculate_crc(self.data.as_ref().iter().copied()).to_be_bytes();
+            let mut bytes = len.to_be_bytes().to_vec();
+            bytes.extend(HEADER);
+            bytes.extend(self.data.as_ref());
+            bytes.extend(crc);
+            bytes
+        }
+    }
+    impl IDATChunk<Vec<u8>> {
+        pub fn encode_data(bytes: Vec<u8>) -> Self {
+            Self {
+                data: compress_to_vec_zlib(&bytes, 8),
+            }
         }
     }
 
-    pub fn parse_chunk(input: &[u8]) -> IResult<&[u8], IDATChunk> {
+    pub fn parse_chunk(input: &[u8]) -> IResult<&[u8], IDATChunk<&[u8]>> {
         let (input, length) = terminated(be_u32, tag(HEADER))(input)?;
         let (input, data) = terminated(take(length), take(4u32))(input)?;
 
@@ -217,7 +255,7 @@ pub mod idat {
     }
 }
 
-mod iend {
+pub mod iend {
     use nom::{
         bytes::complete::{tag, take},
         combinator::map,
@@ -225,10 +263,21 @@ mod iend {
         IResult,
     };
 
+    use crate::crc::calculate_crc;
+
     pub fn parse_chunk(input: &[u8]) -> IResult<&[u8], ()> {
         map(
             pair(tag([0, 0, 0, 0, b'I', b'E', b'N', b'D']), take(4u32)),
             |_| (),
         )(input)
+    }
+
+    pub fn write_end() -> [u8; 12] {
+        let mut data = [0, 0, 0, 0, b'I', b'E', b'N', b'D', 0, 0, 0, 0];
+        let crc = calculate_crc(data[..8].iter().copied()).to_be_bytes();
+        for (i, b) in crc.into_iter().enumerate() {
+            data[i + 8] = b;
+        }
+        data
     }
 }
