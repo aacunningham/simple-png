@@ -19,3 +19,10 @@ fn test_round_trip() {
     let p = PNG::from_bytes(&data).unwrap();
     assert_eq!(pixels, p.pixels);
 }
+
+#[test]
+fn test_round_trip_2() {
+    let p = PNG::from_bytes(FILE).unwrap();
+    let data = encode(p.header.height, p.header.width, &p.pixels);
+    assert_eq!(FILE, data);
+}

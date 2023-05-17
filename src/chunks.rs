@@ -115,6 +115,17 @@ pub mod ihdr {
             }
         }
     }
+    impl ColorType {
+        pub fn channel_count(&self) -> u8 {
+            match self {
+                Self::Greyscale => 1,
+                Self::IndexedColor => 1,
+                Self::GreyscaleWithAlpha => 2,
+                Self::Truecolor => 3,
+                Self::TrueColorWithAlpha => 4,
+            }
+        }
+    }
 
     pub fn parse_chunk(input: &[u8]) -> IResult<&[u8], IHDRChunk> {
         let (input, (width, height, chunk_data)) = delimited(
@@ -147,7 +158,7 @@ pub mod ihdr {
             bytes.push(self.compression_method);
             bytes.push(self.filter_method);
             bytes.push(self.interlace_method);
-            let crc = calculate_crc(bytes[8..].iter().copied()).to_be_bytes();
+            let crc = calculate_crc(bytes[4..].iter().copied()).to_be_bytes();
             bytes.extend(crc);
             bytes
         }
@@ -231,10 +242,10 @@ pub mod idat {
         }
         pub fn to_bytes(self) -> Vec<u8> {
             let len = self.data.as_ref().len() as u32;
-            let crc = calculate_crc(self.data.as_ref().iter().copied()).to_be_bytes();
             let mut bytes = len.to_be_bytes().to_vec();
             bytes.extend(HEADER);
             bytes.extend(self.data.as_ref());
+            let crc = calculate_crc(bytes[4..].iter().copied()).to_be_bytes();
             bytes.extend(crc);
             bytes
         }
@@ -274,7 +285,7 @@ pub mod iend {
 
     pub fn write_end() -> [u8; 12] {
         let mut data = [0, 0, 0, 0, b'I', b'E', b'N', b'D', 0, 0, 0, 0];
-        let crc = calculate_crc(data[..8].iter().copied()).to_be_bytes();
+        let crc = calculate_crc(data[4..8].iter().copied()).to_be_bytes();
         for (i, b) in crc.into_iter().enumerate() {
             data[i + 8] = b;
         }
