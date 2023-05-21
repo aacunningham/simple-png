@@ -165,6 +165,39 @@ pub mod ihdr {
     }
 }
 
+pub mod plte {
+    use nom::{
+        bytes::complete::{tag, take},
+        number::complete::be_u32,
+        sequence::terminated,
+        IResult,
+    };
+
+    pub const HEADER: &[u8; 4] = b"PLTE";
+
+    #[allow(non_camel_case_types)]
+    #[derive(Debug)]
+    pub struct PLTEChunk<'a> {
+        colors: &'a [u8],
+    }
+    impl PLTEChunk<'_> {
+        pub fn get_color(&self, index: u8) -> Option<(u8, u8, u8)> {
+            let index = index as usize;
+            Some((
+                *self.colors.get(index)?,
+                *self.colors.get(index + 1)?,
+                *self.colors.get(index + 2)?,
+            ))
+        }
+    }
+
+    pub fn parse_chunk(input: &[u8]) -> IResult<&[u8], PLTEChunk> {
+        let (input, length) = terminated(be_u32, tag(HEADER))(input)?;
+        let (input, colors) = take(length)(input)?;
+        Ok((input, PLTEChunk { colors }))
+    }
+}
+
 mod phys {
     use nom::{
         bytes::complete::{tag, take},
@@ -231,15 +264,12 @@ pub mod idat {
 
     #[derive(Debug)]
     pub struct IDATChunk<T> {
-        data: T,
+        pub data: T,
     }
     impl<'a, T> IDATChunk<T>
     where
         T: AsRef<[u8]>,
     {
-        pub fn decode_data(&self) -> Vec<u8> {
-            decompress_to_vec_zlib(self.data.as_ref()).unwrap()
-        }
         pub fn to_bytes(self) -> Vec<u8> {
             let len = self.data.as_ref().len() as u32;
             let mut bytes = len.to_be_bytes().to_vec();
@@ -248,13 +278,6 @@ pub mod idat {
             let crc = calculate_crc(bytes[4..].iter().copied()).to_be_bytes();
             bytes.extend(crc);
             bytes
-        }
-    }
-    impl IDATChunk<Vec<u8>> {
-        pub fn encode_data(bytes: Vec<u8>) -> Self {
-            Self {
-                data: compress_to_vec_zlib(&bytes, 8),
-            }
         }
     }
 

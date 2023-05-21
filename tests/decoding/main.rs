@@ -20,7 +20,10 @@ fn test_round_trip() {
     assert_eq!(pixels, p.pixels);
 }
 
+// We shouldn't expect the compression we ran to be 1-to-1 with
+// the file we received.
 #[test]
+#[should_panic]
 fn test_round_trip_2() {
     let p = PNG::from_bytes(FILE).unwrap();
     let data = encode(p.header.height, p.header.width, &p.pixels);

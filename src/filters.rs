@@ -8,20 +8,37 @@ trait FilterType {
 pub enum Filter {
     None,
     Sub,
+    Up,
+    Average,
+    Paeth,
 }
 impl Filter {
     #[allow(unused)]
-    pub fn filter(&self, x: u8, a: u8, _b: u8, _c: u8) -> u8 {
+    pub fn filter(&self, x: u8, a: u8, b: u8, c: u8) -> u8 {
         match self {
             Filter::None => x,
-            Filter::Sub => x - a,
+            Filter::Sub => x.wrapping_sub(a),
+            Filter::Up => x.wrapping_sub(b),
+            Filter::Average => {
+                let a = a as u16;
+                let b = b as u16;
+                x.wrapping_sub((a + b / 2) as u8)
+            }
+            Filter::Paeth => x.wrapping_sub(paeth_predictor(a, b, c)),
         }
     }
 
-    pub fn reconstruct(&self, x: u8, a: u8, _b: u8, _c: u8) -> u8 {
+    pub fn reconstruct(&self, x: u8, a: u8, b: u8, c: u8) -> u8 {
         match self {
             Filter::None => x,
-            Filter::Sub => x.overflowing_add(a).0,
+            Filter::Sub => x.wrapping_add(a),
+            Filter::Up => x.wrapping_add(b),
+            Filter::Average => {
+                let a = a as u16;
+                let b = b as u16;
+                x.wrapping_add((a + b / 2) as u8)
+            }
+            Filter::Paeth => x.wrapping_add(paeth_predictor(a, b, c)),
         }
     }
 }
@@ -31,7 +48,24 @@ impl TryFrom<u8> for Filter {
         match value {
             0 => Ok(Self::None),
             1 => Ok(Self::Sub),
+            2 => Ok(Self::Up),
+            3 => Ok(Self::Average),
+            4 => Ok(Self::Paeth),
             i => Err(anyhow!("We don't support {i}")),
         }
+    }
+}
+
+fn paeth_predictor(a: u8, b: u8, c: u8) -> u8 {
+    let p = a as i16 + b as i16 - c as i16;
+    let pa = i16::abs(p - a as i16);
+    let pb = i16::abs(p - b as i16);
+    let pc = i16::abs(p - c as i16);
+    if pa <= pb && pa <= pc {
+        a as u8
+    } else if pb <= pc {
+        b as u8
+    } else {
+        c as u8
     }
 }

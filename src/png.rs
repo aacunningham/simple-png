@@ -8,26 +8,10 @@ use crate::{
         iter_chunks, Chunk,
     },
     decoder::parse_signature,
-    filters::Filter,
+    image_data::{compress_data, decompress_data},
+    pixel::Pixel,
 };
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
-pub struct Pixel {
-    red: u8,
-    green: u8,
-    blue: u8,
-    alpha: u8,
-}
-impl Pixel {
-    pub fn new(red: u8, green: u8, blue: u8, alpha: u8) -> Self {
-        Self {
-            red,
-            green,
-            blue,
-            alpha,
-        }
-    }
-}
 #[derive(Debug)]
 pub struct PNG {
     pub header: IHDRChunk,
@@ -46,56 +30,27 @@ impl PNG {
                     header = ihdr;
                 }
                 Chunk::IDAT(idat) => {
-                    data.extend(idat.decode_data());
+                    data.extend(idat.data);
                 }
                 _ => (),
             }
         }
-        dbg!(&data);
         if header.bit_depth != 8 {
             bail!("Only bit depth of 8 is supported");
         }
+        let scanlines = decompress_data(&data, &header);
+
         let channels = header.color_type.channel_count() as usize;
         let scanline_size = header.width as usize * channels + 1;
         let mut pixels = Vec::with_capacity(header.width as usize * header.height as usize);
-
-        let (filter, rest) = (
-            Filter::try_from(data[0]).unwrap(),
-            &mut data[1..scanline_size],
-        );
-        for b in rest[0..channels].iter_mut() {
-            *b = filter.reconstruct(*b, 0, 0, 0);
-        }
-        for i in channels..rest.len() {
-            rest[i] = filter.reconstruct(rest[i], rest[i - channels], 0, 0);
-        }
-        for p in rest.chunks(channels) {
-            pixels.push(Pixel {
-                red: p[0],
-                green: p[1],
-                blue: p[2],
-                alpha: p[3],
-            });
-        }
-        for i in 1..header.height as usize {
-            let filter = Filter::try_from(data[i * scanline_size]).unwrap();
-            let (start, stop) = (i * scanline_size + 1, (i + 1) * scanline_size);
-            for j in start..(start + channels) {
-                data[j] = filter.reconstruct(data[j], 0, data[j - scanline_size], 0);
-            }
-            for j in (start + channels)..stop {
-                let a = data[j - channels];
-                let b = data[j - scanline_size];
-                let c = data[j - channels - scanline_size];
-                data[j] = filter.reconstruct(data[j], a, b, c);
-            }
-            for p in data[start..stop].chunks(channels) {
+        for scanline in scanlines.chunks(scanline_size) {
+            for pixel in scanline[1..].chunks(channels) {
                 pixels.push(Pixel {
-                    red: p[0],
-                    green: p[1],
-                    blue: p[2],
-                    alpha: p[3],
-                });
+                    red: pixel[0],
+                    green: pixel[1],
+                    blue: pixel[2],
+                    alpha: pixel[3],
+                })
             }
         }
 
@@ -123,39 +78,13 @@ pub fn encode(height: u32, width: u32, pixel: &[Pixel]) -> Vec<u8> {
             data.push(p.alpha);
         }
     }
-    filter_idat(&mut data, &ihdr);
-    let idat = IDATChunk::encode_data(data);
+    let compressed_data = compress_data(&mut data, &ihdr);
+    let idat = IDATChunk {
+        data: &compressed_data,
+    };
     let mut png_data = b"\x89PNG\x0d\x0a\x1a\x0a".to_vec();
     png_data.extend(ihdr.to_bytes());
     png_data.extend(idat.to_bytes());
     png_data.extend(iend::write_end());
     png_data
-}
-
-fn filter_idat(data: &mut [u8], ihdr: &IHDRChunk) {
-    let channel_count = ihdr.color_type.channel_count() as usize;
-    let scanline_size = channel_count * ihdr.width as usize + 1;
-
-    // Handle first row as special case
-    data[0] = Filter::Sub as u8;
-    for i in 1..(channel_count + 1) {
-        data[i] = Filter::Sub.filter(data[i], 0, 0, 0);
-    }
-    for i in (channel_count + 1)..scanline_size {
-        data[i] = Filter::Sub.filter(data[i], data[i - channel_count], 0, 0)
-    }
-
-    // Remaining rows
-    for i in 1..ihdr.height as usize {
-        let (start, stop) = (i * scanline_size + 1, (i + 1) * scanline_size);
-        for j in start..(start + channel_count) {
-            data[j] = Filter::Sub.filter(data[j], 0, data[j - scanline_size], 0);
-        }
-        for j in (start + channel_count)..stop {
-            let a = data[j - channel_count];
-            let b = data[j - scanline_size];
-            let c = data[j - channel_count - scanline_size];
-            data[j] = Filter::Sub.filter(data[j], a, b, c);
-        }
-    }
 }
