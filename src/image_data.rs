@@ -8,8 +8,8 @@ pub fn compress_data(data: &mut [u8], ihdr: &IHDRChunk) -> Vec<u8> {
 
     // Handle first scanline as special case
     data[0] = Filter::Sub as u8;
-    for i in 1..(channel_count + 1) {
-        data[i] = Filter::Sub.filter(data[i], 0, 0, 0);
+    for i in data[1..channel_count + 1].iter_mut() {
+        *i = Filter::Sub.filter(*i, 0, 0, 0);
     }
     for i in (channel_count + 1)..scanline_size {
         data[i] = Filter::Sub.filter(data[i], data[i - channel_count], 0, 0)
@@ -29,7 +29,7 @@ pub fn compress_data(data: &mut [u8], ihdr: &IHDRChunk) -> Vec<u8> {
             data[j] = Filter::Sub.filter(data[j], a, b, c);
         }
     }
-    compress_to_vec_zlib(&data, 8)
+    compress_to_vec_zlib(data, 8)
 }
 
 pub fn decompress_data(compressed_data: &[u8], ihdr: &IHDRChunk) -> Vec<u8> {

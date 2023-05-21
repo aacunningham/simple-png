@@ -1,7 +1,7 @@
-use once_cell::unsync::Lazy;
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
 
-const CRC_TABLE: Lazy<HashMap<u8, u32>> = Lazy::new(|| {
+static CRC_TABLE: Lazy<HashMap<u8, u32>> = Lazy::new(|| {
     let mut table = HashMap::new();
     for n in 0..=255 {
         let mut c = n as u32;
@@ -9,7 +9,7 @@ const CRC_TABLE: Lazy<HashMap<u8, u32>> = Lazy::new(|| {
             if c & 1 != 0 {
                 c = 0xedb88320 ^ (c >> 1);
             } else {
-                c = c >> 1;
+                c >>= 1;
             }
         }
         table.insert(n, c);

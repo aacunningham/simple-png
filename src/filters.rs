@@ -62,10 +62,10 @@ fn paeth_predictor(a: u8, b: u8, c: u8) -> u8 {
     let pb = i16::abs(p - b as i16);
     let pc = i16::abs(p - c as i16);
     if pa <= pb && pa <= pc {
-        a as u8
+        a
     } else if pb <= pc {
-        b as u8
+        b
     } else {
-        c as u8
+        c
     }
 }

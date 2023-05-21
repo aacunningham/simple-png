@@ -1,9 +1,10 @@
 use nom::{bytes::complete::take, number::complete::be_u32, sequence::tuple, IResult};
 
-#[allow(non_camel_case_types)]
+#[allow(non_camel_case_types, clippy::upper_case_acronyms)]
 #[derive(Debug)]
 pub enum Chunk<'a> {
     IHDR(ihdr::IHDRChunk),
+    PLTE(plte::PLTEChunk<'a>),
     IDAT(idat::IDATChunk<&'a [u8]>),
     IEND,
     pHYs(phys::pHYsChunk),
@@ -13,6 +14,9 @@ pub enum Chunk<'a> {
 pub fn parse_chunk(input: &[u8]) -> IResult<&[u8], Chunk<'_>> {
     if let Ok((input, chunk)) = ihdr::parse_chunk(input) {
         return Ok((input, Chunk::IHDR(chunk)));
+    }
+    if let Ok((input, chunk)) = plte::parse_chunk(input) {
+        return Ok((input, Chunk::PLTE(chunk)));
     }
     if let Ok((input, chunk)) = phys::parse_chunk(input) {
         return Ok((input, Chunk::pHYs(chunk)));
@@ -242,15 +246,14 @@ mod phys {
             pHYsChunk {
                 _x_axis_ppu,
                 _y_axis_ppu,
-                _unit_specifier: _unit_specifier.into(),
+                _unit_specifier,
             },
         ))
     }
 }
 
 pub mod idat {
-    use miniz_oxide::deflate::compress_to_vec_zlib;
-    use miniz_oxide::inflate::decompress_to_vec_zlib;
+
     use nom::{
         bytes::complete::{tag, take},
         number::complete::be_u32,
@@ -266,11 +269,11 @@ pub mod idat {
     pub struct IDATChunk<T> {
         pub data: T,
     }
-    impl<'a, T> IDATChunk<T>
+    impl<T> IDATChunk<T>
     where
         T: AsRef<[u8]>,
     {
-        pub fn to_bytes(self) -> Vec<u8> {
+        pub fn to_bytes(&self) -> Vec<u8> {
             let len = self.data.as_ref().len() as u32;
             let mut bytes = len.to_be_bytes().to_vec();
             bytes.extend(HEADER);
