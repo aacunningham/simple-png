@@ -1,0 +1,53 @@
+---
+source: tests/decoding/main.rs
+expression: "PNG::decode(&input).unwrap()"
+---
+PNG {
+    header: IHDRChunk {
+        width: 2,
+        height: 2,
+        bit_depth: 1,
+        color_type: IndexedColor,
+        compression_method: 0,
+        filter_method: 0,
+        interlace_method: 1,
+    },
+    pixels: [
+        Pixel {
+            red: 0,
+            green: 255,
+            blue: 255,
+            alpha: 65535,
+        },
+        Pixel {
+            red: 0,
+            green: 255,
+            blue: 255,
+            alpha: 65535,
+        },
+        Pixel {
+            red: 0,
+            green: 255,
+            blue: 255,
+            alpha: 65535,
+        },
+        Pixel {
+            red: 0,
+            green: 255,
+            blue: 255,
+            alpha: 65535,
+        },
+        Pixel {
+            red: 0,
+            green: 255,
+            blue: 255,
+            alpha: 65535,
+        },
+        Pixel {
+            red: 0,
+            green: 255,
+            blue: 255,
+            alpha: 65535,
+        },
+    ],
+}

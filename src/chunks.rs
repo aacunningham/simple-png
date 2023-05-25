@@ -1,4 +1,13 @@
-use nom::{bytes::complete::take, number::complete::be_u32, sequence::tuple, IResult};
+use nom::{
+    bytes::complete::{tag, take},
+    combinator::map,
+    multi::length_data,
+    number::complete::be_u32,
+    sequence::{delimited, terminated, tuple},
+    IResult,
+};
+
+use crate::crc::calculate_crc;
 
 #[allow(non_camel_case_types, clippy::upper_case_acronyms)]
 #[derive(Debug)]
@@ -27,8 +36,8 @@ pub fn parse_chunk(input: &[u8]) -> IResult<&[u8], Chunk<'_>> {
     if let Ok((input, _)) = iend::parse_chunk(input) {
         return Ok((input, Chunk::IEND));
     }
-    let (input, (_length, raw_chunk_type)) = tuple((be_u32, take(4u32)))(input)?;
-    let (input, (_chunk_data, raw_crc)) = tuple((take(_length), take(4u32)))(input)?;
+    let (input, (_length, raw_chunk_type)) = tuple((be_u32, take(4usize)))(input)?;
+    let (input, (_chunk_data, raw_crc)) = tuple((take(_length), take(4usize)))(input)?;
     Ok((
         input,
         Chunk::Unknown(RawChunk {
@@ -75,15 +84,21 @@ pub struct RawChunk<'a> {
     _crc: &'a [u8; 4],
 }
 
-pub mod ihdr {
-    use nom::{
-        bytes::complete::{tag, take},
-        number::complete::be_u32,
-        sequence::{delimited, tuple},
-        IResult,
-    };
+pub fn valid_chunk<'a, Error: nom::error::ParseError<&'a [u8]>>(
+    header: &'static [u8],
+) -> impl Fn(&'a [u8]) -> IResult<&'a [u8], &'a [u8], Error> {
+    move |i: &'a [u8]| {
+        let (i, chunk_data) = length_data(map(be_u32, |v| v + 8))(i)?;
+        let crc = calculate_crc(chunk_data[0..chunk_data.len() - 4].iter().copied()).to_be_bytes();
+        let (_, data) = delimited(tag(header), take(chunk_data.len() - 8), tag(crc))(chunk_data)?;
+        Ok((i, data))
+    }
+}
 
+pub mod ihdr {
+    use super::valid_chunk;
     use crate::crc::calculate_crc;
+    use nom::{bytes::complete::take, number::complete::be_u32, sequence::tuple, IResult};
 
     pub const HEADER: &[u8; 4] = b"IHDR";
 
@@ -97,6 +112,38 @@ pub mod ihdr {
         pub filter_method: u8,
         pub interlace_method: u8,
     }
+    impl IHDRChunk {
+        pub fn to_bytes(&self) -> Vec<u8> {
+            let mut bytes = vec![0, 0, 0, 13];
+            bytes.extend(HEADER);
+            bytes.extend(&self.width.to_be_bytes());
+            bytes.extend(&self.height.to_be_bytes());
+            bytes.extend(&[
+                self.bit_depth,
+                self.color_type as u8,
+                self.compression_method,
+                self.filter_method,
+                self.interlace_method,
+            ]);
+            let crc = calculate_crc(bytes[4..].iter().copied()).to_be_bytes();
+            bytes.extend(crc);
+            bytes
+        }
+
+        pub fn filter_width(&self) -> u8 {
+            let channel_count = self.color_type.channel_count();
+            let sample_width = u8::max(self.bit_depth / 8, 1);
+            channel_count * sample_width
+        }
+
+        pub fn scanline_size(&self) -> usize {
+            let pixel_size = self.color_type.channel_count() * self.bit_depth;
+            let full_pixel_width = self.width as usize * pixel_size as usize;
+            let rem = usize::min(1, full_pixel_width % 8);
+            let size = full_pixel_width / 8 + rem as usize + 1;
+            size
+        }
+    }
 
     #[derive(Debug, Default, Clone, Copy)]
     pub enum ColorType {
@@ -105,7 +152,7 @@ pub mod ihdr {
         Truecolor = 2,
         IndexedColor = 3,
         GreyscaleWithAlpha = 4,
-        TrueColorWithAlpha = 6,
+        TruecolorWithAlpha = 6,
     }
     impl From<u8> for ColorType {
         fn from(value: u8) -> Self {
@@ -114,7 +161,7 @@ pub mod ihdr {
                 2 => Self::Truecolor,
                 3 => Self::IndexedColor,
                 4 => Self::GreyscaleWithAlpha,
-                6 => Self::TrueColorWithAlpha,
+                6 => Self::TruecolorWithAlpha,
                 _ => panic!(),
             }
         }
@@ -126,56 +173,32 @@ pub mod ihdr {
                 Self::IndexedColor => 1,
                 Self::GreyscaleWithAlpha => 2,
                 Self::Truecolor => 3,
-                Self::TrueColorWithAlpha => 4,
+                Self::TruecolorWithAlpha => 4,
             }
         }
     }
 
     pub fn parse_chunk(input: &[u8]) -> IResult<&[u8], IHDRChunk> {
-        let (input, (width, height, chunk_data)) = delimited(
-            tuple((tag([0, 0, 0, 13]), tag(HEADER))),
-            tuple((be_u32, be_u32, take(5u32))),
-            take(4u32),
-        )(input)?;
+        let (rest, chunk_data) = valid_chunk(HEADER)(input)?;
+        let (_, (width, height, other_bytes)) = tuple((be_u32, be_u32, take(5usize)))(chunk_data)?;
         Ok((
-            input,
+            rest,
             IHDRChunk {
                 width,
                 height,
-                bit_depth: chunk_data[0],
-                color_type: chunk_data[1].into(),
-                compression_method: chunk_data[2],
-                filter_method: chunk_data[3],
-                interlace_method: chunk_data[4],
+                bit_depth: other_bytes[0],
+                color_type: other_bytes[1].into(),
+                compression_method: other_bytes[2],
+                filter_method: other_bytes[3],
+                interlace_method: other_bytes[4],
             },
         ))
-    }
-
-    impl IHDRChunk {
-        pub fn to_bytes(&self) -> Vec<u8> {
-            let mut bytes = vec![0, 0, 0, 13];
-            bytes.extend(HEADER);
-            bytes.extend(&self.width.to_be_bytes());
-            bytes.extend(&self.height.to_be_bytes());
-            bytes.push(self.bit_depth);
-            bytes.push(self.color_type as u8);
-            bytes.push(self.compression_method);
-            bytes.push(self.filter_method);
-            bytes.push(self.interlace_method);
-            let crc = calculate_crc(bytes[4..].iter().copied()).to_be_bytes();
-            bytes.extend(crc);
-            bytes
-        }
     }
 }
 
 pub mod plte {
-    use nom::{
-        bytes::complete::{tag, take},
-        number::complete::be_u32,
-        sequence::terminated,
-        IResult,
-    };
+    use super::valid_chunk;
+    use nom::IResult;
 
     pub const HEADER: &[u8; 4] = b"PLTE";
 
@@ -196,17 +219,16 @@ pub mod plte {
     }
 
     pub fn parse_chunk(input: &[u8]) -> IResult<&[u8], PLTEChunk> {
-        let (input, length) = terminated(be_u32, tag(HEADER))(input)?;
-        let (input, colors) = take(length)(input)?;
-        Ok((input, PLTEChunk { colors }))
+        let (rest, colors) = valid_chunk(HEADER)(input)?;
+        Ok((rest, PLTEChunk { colors }))
     }
 }
 
 mod phys {
+    use super::valid_chunk;
     use nom::{
-        bytes::complete::{tag, take},
         number::complete::{be_u32, u8},
-        sequence::{delimited, tuple},
+        sequence::tuple,
         IResult,
     };
 
@@ -236,13 +258,11 @@ mod phys {
     }
 
     pub fn parse_chunk(input: &[u8]) -> IResult<&[u8], pHYsChunk> {
-        let (input, (_x_axis_ppu, _y_axis_ppu, _unit_specifier)) = delimited(
-            tuple((tag([0, 0, 0, 9]), tag(HEADER))),
-            tuple((be_u32, be_u32, u8)),
-            take(4u32),
-        )(input)?;
+        let (rest, chunk_data) = valid_chunk(HEADER)(input)?;
+        let (_, (_x_axis_ppu, _y_axis_ppu, _unit_specifier)) =
+            tuple((be_u32, be_u32, u8))(chunk_data)?;
         Ok((
-            input,
+            rest,
             pHYsChunk {
                 _x_axis_ppu,
                 _y_axis_ppu,
@@ -253,15 +273,10 @@ mod phys {
 }
 
 pub mod idat {
-
-    use nom::{
-        bytes::complete::{tag, take},
-        number::complete::be_u32,
-        sequence::terminated,
-        IResult,
-    };
-
     use crate::crc::calculate_crc;
+    use nom::IResult;
+
+    use super::valid_chunk;
 
     pub const HEADER: &[u8; 4] = b"IDAT";
 
@@ -285,28 +300,20 @@ pub mod idat {
     }
 
     pub fn parse_chunk(input: &[u8]) -> IResult<&[u8], IDATChunk<&[u8]>> {
-        let (input, length) = terminated(be_u32, tag(HEADER))(input)?;
-        let (input, data) = terminated(take(length), take(4u32))(input)?;
-
-        Ok((input, IDATChunk { data }))
+        let (rest, data) = valid_chunk(HEADER)(input)?;
+        Ok((rest, IDATChunk { data }))
     }
 }
 
 pub mod iend {
-    use nom::{
-        bytes::complete::{tag, take},
-        combinator::map,
-        sequence::pair,
-        IResult,
-    };
+    use nom::{combinator::map, IResult};
 
     use crate::crc::calculate_crc;
 
+    use super::valid_chunk;
+
     pub fn parse_chunk(input: &[u8]) -> IResult<&[u8], ()> {
-        map(
-            pair(tag([0, 0, 0, 0, b'I', b'E', b'N', b'D']), take(4u32)),
-            |_| (),
-        )(input)
+        map(valid_chunk(b"IEND"), |_| ())(input)
     }
 
     pub fn write_end() -> [u8; 12] {

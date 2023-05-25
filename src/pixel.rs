@@ -1,14 +1,26 @@
-use crate::chunks::plte::PLTEChunk;
+use crate::chunks::{
+    ihdr::{ColorType, IHDRChunk},
+    plte::PLTEChunk,
+};
+use anyhow::anyhow;
+use nom::{
+    bits::{bits, complete::take},
+    combinator::map,
+    error::Error,
+    multi::count,
+    sequence::tuple,
+    IResult,
+};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
 pub struct Pixel {
-    pub red: u8,
-    pub green: u8,
-    pub blue: u8,
-    pub alpha: u8,
+    pub red: u16,
+    pub green: u16,
+    pub blue: u16,
+    pub alpha: u16,
 }
 impl Pixel {
-    pub fn new(red: u8, green: u8, blue: u8, alpha: u8) -> Self {
+    pub fn new(red: u16, green: u16, blue: u16, alpha: u16) -> Self {
         Self {
             red,
             green,
@@ -20,13 +32,169 @@ impl Pixel {
 
 pub struct IndexedPixel(u8);
 impl IndexedPixel {
-    pub fn to_pixel(&self, palette: PLTEChunk) -> Option<Pixel> {
-        let (red, green, blue) = palette.get_color(self.0)?;
-        Some(Pixel {
-            red,
-            green,
-            blue,
-            alpha: u8::MAX,
+    pub fn to_pixel(&self, palette: &PLTEChunk) -> Result<Pixel, anyhow::Error> {
+        let (red, green, blue) = palette
+            .get_color(self.0)
+            .ok_or(anyhow!("color could not be found in palette"))?;
+        Ok(Pixel {
+            red: red as u16,
+            green: green as u16,
+            blue: blue as u16,
+            alpha: u16::MAX,
         })
     }
+}
+
+pub fn parse_pixels<'a, I: Iterator<Item = &'a [u8]>>(
+    scanlines: I,
+    header: &IHDRChunk,
+    palette: Option<&PLTEChunk>,
+) -> Vec<Pixel> {
+    let mut all_pixels = Vec::with_capacity((header.width * header.height) as usize);
+    for scanline in scanlines {
+        let pixels = match header.color_type {
+            ColorType::Greyscale => {
+                bits::<_, _, Error<(&[u8], usize)>, Error<&[u8]>, _>(count(
+                    parse_greyscale(header.bit_depth),
+                    header.width as usize,
+                ))(scanline)
+                .unwrap()
+                .1
+            }
+            ColorType::IndexedColor => bits::<_, _, Error<(&[u8], usize)>, Error<&[u8]>, _>(count(
+                parse_indexed_color(header.bit_depth),
+                header.width as usize,
+            ))(scanline)
+            .unwrap()
+            .1
+            .into_iter()
+            .map(|p| p.to_pixel(palette.unwrap()).unwrap())
+            .collect(),
+            ColorType::GreyscaleWithAlpha => {
+                bits::<_, _, Error<(&[u8], usize)>, Error<&[u8]>, _>(count(
+                    parse_greyscale_with_alpha(header.bit_depth),
+                    header.width as usize,
+                ))(scanline)
+                .unwrap()
+                .1
+            }
+            ColorType::Truecolor => {
+                bits::<_, _, Error<(&[u8], usize)>, Error<&[u8]>, _>(count(
+                    parse_truecolor(header.bit_depth),
+                    header.width as usize,
+                ))(scanline)
+                .unwrap()
+                .1
+            }
+            ColorType::TruecolorWithAlpha => {
+                bits::<_, _, Error<(&[u8], usize)>, Error<&[u8]>, _>(count(
+                    parse_truecolor_with_alpha(header.bit_depth),
+                    header.width as usize,
+                ))(scanline)
+                .unwrap()
+                .1
+            }
+        };
+        all_pixels.extend(pixels);
+    }
+    all_pixels
+}
+
+fn parse_greyscale(bit_depth: u8) -> impl Fn((&[u8], usize)) -> IResult<(&[u8], usize), Pixel> {
+    move |(input, bit_offset): (&[u8], usize)| {
+        let (rest, intensity) = take_scaled(bit_depth)((input, bit_offset))?;
+
+        Ok((
+            rest,
+            Pixel {
+                red: intensity,
+                green: intensity,
+                blue: intensity,
+                alpha: u16::MAX,
+            },
+        ))
+    }
+}
+
+fn parse_indexed_color(
+    bit_depth: u8,
+) -> impl Fn((&[u8], usize)) -> IResult<(&[u8], usize), IndexedPixel> {
+    move |(input, bit_offset): (&[u8], usize)| {
+        let (rest, pixel) = take(bit_depth)((input, bit_offset))?;
+        Ok((rest, IndexedPixel(pixel)))
+    }
+}
+
+fn parse_greyscale_with_alpha(
+    bit_depth: u8,
+) -> impl Fn((&[u8], usize)) -> IResult<(&[u8], usize), Pixel> {
+    move |(input, bit_offset): (&[u8], usize)| {
+        let (rest, (intensity, alpha)) =
+            tuple((take_scaled(bit_depth), take_scaled(bit_depth)))((input, bit_offset))?;
+
+        Ok((
+            rest,
+            Pixel {
+                red: intensity,
+                green: intensity,
+                blue: intensity,
+                alpha,
+            },
+        ))
+    }
+}
+
+fn parse_truecolor(bit_depth: u8) -> impl Fn((&[u8], usize)) -> IResult<(&[u8], usize), Pixel> {
+    move |(input, bit_offset): (&[u8], usize)| {
+        let (rest, (red, green, blue)) = tuple((
+            take_scaled(bit_depth),
+            take_scaled(bit_depth),
+            take_scaled(bit_depth),
+        ))((input, bit_offset))?;
+
+        Ok((
+            rest,
+            Pixel {
+                red,
+                green,
+                blue,
+                alpha: u16::MAX,
+            },
+        ))
+    }
+}
+
+fn parse_truecolor_with_alpha(
+    bit_depth: u8,
+) -> impl Fn((&[u8], usize)) -> IResult<(&[u8], usize), Pixel> {
+    move |(input, bit_offset): (&[u8], usize)| {
+        let (rest, (red, green, blue, alpha)) = tuple((
+            take_scaled(bit_depth),
+            take_scaled(bit_depth),
+            take_scaled(bit_depth),
+            take_scaled(bit_depth),
+        ))((input, bit_offset))?;
+
+        Ok((
+            rest,
+            Pixel {
+                red,
+                green,
+                blue,
+                alpha,
+            },
+        ))
+    }
+}
+
+fn take_scaled<'a>(
+    bit_depth: u8,
+) -> impl FnMut((&'a [u8], usize)) -> IResult<(&'a [u8], usize), u16> {
+    map(take(bit_depth), move |v: u16| {
+        if bit_depth == 16 {
+            v
+        } else {
+            v * (u16::MAX / (2u16.pow(bit_depth as u32) - 1))
+        }
+    })
 }
