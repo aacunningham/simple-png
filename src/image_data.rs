@@ -1,3 +1,4 @@
+use anyhow::Context;
 use miniz_oxide::{deflate::compress_to_vec_zlib, inflate::decompress_to_vec_zlib};
 
 use crate::{chunks::ihdr::IHDRChunk, filters::Filter};
@@ -32,13 +33,14 @@ pub fn compress_data(data: &mut [u8], ihdr: &IHDRChunk) -> Vec<u8> {
     compress_to_vec_zlib(data, 9)
 }
 
-pub fn decompress_data(compressed_data: &[u8], ihdr: &IHDRChunk) -> Vec<u8> {
-    let mut data = decompress_to_vec_zlib(compressed_data).unwrap();
+pub fn decompress_data(compressed_data: &[u8], ihdr: &IHDRChunk) -> anyhow::Result<Vec<u8>> {
+    let mut data =
+        decompress_to_vec_zlib(compressed_data).context("Failed to decompress image data.")?;
     let pixel_width = ihdr.filter_width() as usize;
     let scanline_size = ihdr.scanline_size();
 
     // Handle first scanline as special case
-    let filter = Filter::try_from(data[0]).unwrap();
+    let filter = Filter::try_from(data[0])?;
     for b in data[1..(pixel_width + 1)].iter_mut() {
         *b = filter.reconstruct(*b, 0, 0, 0);
     }
@@ -48,7 +50,7 @@ pub fn decompress_data(compressed_data: &[u8], ihdr: &IHDRChunk) -> Vec<u8> {
 
     // Remaining scanlines
     for i in 1..ihdr.height as usize {
-        let filter = Filter::try_from(data[i * scanline_size]).unwrap();
+        let filter = Filter::try_from(data[i * scanline_size])?;
         let (start, stop) = (i * scanline_size + 1, (i + 1) * scanline_size);
         for j in start..(start + pixel_width) {
             data[j] = filter.reconstruct(data[j], 0, data[j - scanline_size], 0);
@@ -60,5 +62,5 @@ pub fn decompress_data(compressed_data: &[u8], ihdr: &IHDRChunk) -> Vec<u8> {
             data[j] = filter.reconstruct(data[j], a, b, c);
         }
     }
-    data
+    Ok(data)
 }

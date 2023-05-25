@@ -49,7 +49,7 @@ pub fn parse_pixels<'a, I: Iterator<Item = &'a [u8]>>(
     scanlines: I,
     header: &IHDRChunk,
     palette: Option<&PLTEChunk>,
-) -> Vec<Pixel> {
+) -> anyhow::Result<Vec<Pixel>> {
     let mut all_pixels = Vec::with_capacity((header.width * header.height) as usize);
     for scanline in scanlines {
         let pixels = match header.color_type {
@@ -58,24 +58,28 @@ pub fn parse_pixels<'a, I: Iterator<Item = &'a [u8]>>(
                     parse_greyscale(header.bit_depth),
                     header.width as usize,
                 ))(scanline)
-                .unwrap()
+                .map_err(|e| e.to_owned())?
                 .1
             }
             ColorType::IndexedColor => bits::<_, _, Error<(&[u8], usize)>, Error<&[u8]>, _>(count(
                 parse_indexed_color(header.bit_depth),
                 header.width as usize,
             ))(scanline)
-            .unwrap()
+            .map_err(|e| e.to_owned())?
             .1
             .into_iter()
-            .map(|p| p.to_pixel(palette.unwrap()).unwrap())
-            .collect(),
+            .map(|p| {
+                palette
+                    .ok_or(anyhow!("A pLTe chunk is needed for IndexedColor type"))
+                    .and_then(|plte| p.to_pixel(plte))
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?,
             ColorType::GreyscaleWithAlpha => {
                 bits::<_, _, Error<(&[u8], usize)>, Error<&[u8]>, _>(count(
                     parse_greyscale_with_alpha(header.bit_depth),
                     header.width as usize,
                 ))(scanline)
-                .unwrap()
+                .map_err(|e| e.to_owned())?
                 .1
             }
             ColorType::Truecolor => {
@@ -83,7 +87,7 @@ pub fn parse_pixels<'a, I: Iterator<Item = &'a [u8]>>(
                     parse_truecolor(header.bit_depth),
                     header.width as usize,
                 ))(scanline)
-                .unwrap()
+                .map_err(|e| e.to_owned())?
                 .1
             }
             ColorType::TruecolorWithAlpha => {
@@ -91,13 +95,13 @@ pub fn parse_pixels<'a, I: Iterator<Item = &'a [u8]>>(
                     parse_truecolor_with_alpha(header.bit_depth),
                     header.width as usize,
                 ))(scanline)
-                .unwrap()
+                .map_err(|e| e.to_owned())?
                 .1
             }
         };
         all_pixels.extend(pixels);
     }
-    all_pixels
+    Ok(all_pixels)
 }
 
 fn parse_greyscale(bit_depth: u8) -> impl Fn((&[u8], usize)) -> IResult<(&[u8], usize), Pixel> {

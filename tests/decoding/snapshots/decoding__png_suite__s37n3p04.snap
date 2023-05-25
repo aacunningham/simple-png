@@ -1,6 +1,6 @@
 ---
 source: tests/decoding/main.rs
-expression: "PNG::decode(&input).unwrap()"
+expression: png
 ---
 PNG {
     header: IHDRChunk {

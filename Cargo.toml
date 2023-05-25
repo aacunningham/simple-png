@@ -10,7 +10,7 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = "1.0.71"
-miniz_oxide = "0.7.1"
+miniz_oxide = { version = "0.7.1", features = ["std"] }
 nom = "7.1.3"
 once_cell = "1.17.1"
 

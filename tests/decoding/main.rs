@@ -17,7 +17,8 @@ macro_rules! png_suite {
                 ))
                 .unwrap();
                 println!("{:?}", input);
-                insta::assert_debug_snapshot!(PNG::decode(&input).unwrap());
+                let png = PNG::decode(&input).unwrap();
+                insta::assert_debug_snapshot!(png);
             }
             )*
         }

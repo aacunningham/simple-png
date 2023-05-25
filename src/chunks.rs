@@ -31,7 +31,7 @@ pub fn parse_chunk(input: &[u8]) -> IResult<&[u8], Chunk<'_>> {
         _ => Ok((
             rest,
             Chunk::Unknown(RawChunk {
-                _chunk_type: header.try_into().unwrap(),
+                _chunk_type: header,
                 _chunk_data: chunk_data,
             }),
         )),
@@ -51,17 +51,24 @@ pub struct ChunkIter<'a> {
 }
 
 impl<'a> Iterator for ChunkIter<'a> {
-    type Item = Chunk<'a>;
+    type Item = anyhow::Result<Chunk<'a>>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.finished {
             return None;
         }
-        let (rest, chunk) = parse_chunk(self.source).unwrap();
-        self.source = rest;
-        if matches!(chunk, Chunk::IEND) {
-            self.finished = true;
+        match parse_chunk(self.source) {
+            Ok((rest, chunk)) => {
+                self.source = rest;
+                if matches!(chunk, Chunk::IEND) {
+                    self.finished = true;
+                }
+                Some(Ok(chunk))
+            }
+            Err(e) => {
+                self.finished = true;
+                Some(Err(e.to_owned().into()))
+            }
         }
-        Some(chunk)
     }
 }
 
@@ -73,12 +80,23 @@ pub struct RawChunk<'a> {
 
 pub fn valid_chunk<'a, Error: nom::error::ParseError<&'a [u8]>>(
     input: &'a [u8],
-) -> IResult<&'a [u8], (&'a [u8], &'a [u8]), Error> {
-    let (input, chunk_data) = length_data(map(be_u32, |v| v + 8))(input)?;
-    let crc = calculate_crc(chunk_data[0..chunk_data.len() - 4].iter().copied()).to_be_bytes();
+) -> IResult<&'a [u8], (&'a [u8; 4], &'a [u8]), Error> {
+    let (header_length, crc_length) = (4, 4);
+    let (input, chunk_data) = length_data(map(be_u32, |v| v + header_length + crc_length))(input)?;
+    let crc = calculate_crc(
+        chunk_data[0..chunk_data.len() - crc_length as usize]
+            .iter()
+            .copied(),
+    )
+    .to_be_bytes();
     let (_, data) = tuple((
-        take(4usize),
-        terminated(take(chunk_data.len() - 8), tag(crc)),
+        map(take(header_length), |v: &[u8]| {
+            v.try_into().expect("4 bytes should have been taken")
+        }),
+        terminated(
+            take(chunk_data.len() - (header_length + crc_length) as usize),
+            tag(crc),
+        ),
     ))(chunk_data)?;
     Ok((input, data))
 }
@@ -87,7 +105,7 @@ pub mod ihdr {
     use crate::crc::calculate_crc;
     use nom::{bytes::complete::take, number::complete::be_u32, sequence::tuple, IResult};
 
-    pub const HEADER: &[u8] = b"IHDR";
+    pub const HEADER: &[u8; 4] = b"IHDR";
 
     #[derive(Debug, Default)]
     pub struct IHDRChunk {
@@ -185,7 +203,7 @@ pub mod ihdr {
 pub mod plte {
     use nom::IResult;
 
-    pub const HEADER: &[u8] = b"PLTE";
+    pub const HEADER: &[u8; 4] = b"PLTE";
 
     #[allow(non_camel_case_types)]
     #[derive(Debug)]
@@ -215,7 +233,7 @@ mod phys {
         IResult,
     };
 
-    pub const HEADER: &[u8] = b"pHYs";
+    pub const HEADER: &[u8; 4] = b"pHYs";
 
     #[allow(non_camel_case_types)]
     #[derive(Debug)]
@@ -258,7 +276,7 @@ pub mod idat {
     use crate::crc::calculate_crc;
     use nom::IResult;
 
-    pub const HEADER: &[u8] = b"IDAT";
+    pub const HEADER: &[u8; 4] = b"IDAT";
 
     #[derive(Debug)]
     pub struct IDATChunk<T> {
@@ -287,7 +305,7 @@ pub mod idat {
 pub mod iend {
     use crate::crc::calculate_crc;
 
-    pub const HEADER: &[u8] = b"IEND";
+    pub const HEADER: &[u8; 4] = b"IEND";
 
     pub fn write_end() -> [u8; 12] {
         let mut data = [0, 0, 0, 0, b'I', b'E', b'N', b'D', 0, 0, 0, 0];

@@ -51,7 +51,7 @@ impl TryFrom<u8> for Filter {
             2 => Ok(Self::Up),
             3 => Ok(Self::Average),
             4 => Ok(Self::Paeth),
-            i => Err(anyhow!("We don't support {i}")),
+            i => Err(anyhow!("Filter type {i} is unknown.")),
         }
     }
 }

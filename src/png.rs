@@ -81,7 +81,7 @@ impl PNG<Vec<Pixel>> {
         let mut palette = None;
         let mut data = vec![];
         for chunk in iter_chunks(rest) {
-            match chunk {
+            match chunk? {
                 Chunk::IHDR(ihdr) => header = ihdr,
                 Chunk::PLTE(plte) => palette = Some(plte),
                 Chunk::IDAT(idat) => {
@@ -90,13 +90,13 @@ impl PNG<Vec<Pixel>> {
                 _ => (),
             }
         }
-        let scanlines = decompress_data(&data, &header);
+        let scanlines = decompress_data(&data, &header)?;
         let scanline_size = header.scanline_size();
         let pixels = parse_pixels(
             scanlines.chunks(scanline_size).map(|sl| &sl[1..]),
             &header,
             palette.as_ref(),
-        );
+        )?;
         Ok(PNG { header, pixels })
     }
 }
