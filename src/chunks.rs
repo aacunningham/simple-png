@@ -3,7 +3,7 @@ use nom::{
     combinator::map,
     multi::length_data,
     number::complete::be_u32,
-    sequence::{delimited, terminated, tuple},
+    sequence::{terminated, tuple},
     IResult,
 };
 
@@ -21,32 +21,21 @@ pub enum Chunk<'a> {
 }
 
 pub fn parse_chunk(input: &[u8]) -> IResult<&[u8], Chunk<'_>> {
-    if let Ok((input, chunk)) = ihdr::parse_chunk(input) {
-        return Ok((input, Chunk::IHDR(chunk)));
+    let (rest, (header, chunk_data)) = valid_chunk(input)?;
+    match header {
+        ihdr::HEADER => Ok((rest, Chunk::IHDR(ihdr::parse_data(chunk_data)?.1))),
+        plte::HEADER => Ok((rest, Chunk::PLTE(plte::parse_data(chunk_data)?.1))),
+        phys::HEADER => Ok((rest, Chunk::pHYs(phys::parse_data(chunk_data)?.1))),
+        idat::HEADER => Ok((rest, Chunk::IDAT(idat::parse_data(chunk_data)?.1))),
+        iend::HEADER => Ok((rest, Chunk::IEND)),
+        _ => Ok((
+            rest,
+            Chunk::Unknown(RawChunk {
+                _chunk_type: header.try_into().unwrap(),
+                _chunk_data: chunk_data,
+            }),
+        )),
     }
-    if let Ok((input, chunk)) = plte::parse_chunk(input) {
-        return Ok((input, Chunk::PLTE(chunk)));
-    }
-    if let Ok((input, chunk)) = phys::parse_chunk(input) {
-        return Ok((input, Chunk::pHYs(chunk)));
-    }
-    if let Ok((input, chunk)) = idat::parse_chunk(input) {
-        return Ok((input, Chunk::IDAT(chunk)));
-    }
-    if let Ok((input, _)) = iend::parse_chunk(input) {
-        return Ok((input, Chunk::IEND));
-    }
-    let (input, (_length, raw_chunk_type)) = tuple((be_u32, take(4usize)))(input)?;
-    let (input, (_chunk_data, raw_crc)) = tuple((take(_length), take(4usize)))(input)?;
-    Ok((
-        input,
-        Chunk::Unknown(RawChunk {
-            _length,
-            _chunk_type: raw_chunk_type.try_into().unwrap(),
-            _chunk_data,
-            _crc: raw_crc.try_into().unwrap(),
-        }),
-    ))
 }
 
 pub fn iter_chunks(source: &[u8]) -> ChunkIter {
@@ -78,29 +67,27 @@ impl<'a> Iterator for ChunkIter<'a> {
 
 #[derive(Debug)]
 pub struct RawChunk<'a> {
-    _length: u32,
     _chunk_type: &'a [u8; 4],
     _chunk_data: &'a [u8],
-    _crc: &'a [u8; 4],
 }
 
 pub fn valid_chunk<'a, Error: nom::error::ParseError<&'a [u8]>>(
-    header: &'static [u8],
-) -> impl Fn(&'a [u8]) -> IResult<&'a [u8], &'a [u8], Error> {
-    move |i: &'a [u8]| {
-        let (i, chunk_data) = length_data(map(be_u32, |v| v + 8))(i)?;
-        let crc = calculate_crc(chunk_data[0..chunk_data.len() - 4].iter().copied()).to_be_bytes();
-        let (_, data) = delimited(tag(header), take(chunk_data.len() - 8), tag(crc))(chunk_data)?;
-        Ok((i, data))
-    }
+    input: &'a [u8],
+) -> IResult<&'a [u8], (&'a [u8], &'a [u8]), Error> {
+    let (input, chunk_data) = length_data(map(be_u32, |v| v + 8))(input)?;
+    let crc = calculate_crc(chunk_data[0..chunk_data.len() - 4].iter().copied()).to_be_bytes();
+    let (_, data) = tuple((
+        take(4usize),
+        terminated(take(chunk_data.len() - 8), tag(crc)),
+    ))(chunk_data)?;
+    Ok((input, data))
 }
 
 pub mod ihdr {
-    use super::valid_chunk;
     use crate::crc::calculate_crc;
     use nom::{bytes::complete::take, number::complete::be_u32, sequence::tuple, IResult};
 
-    pub const HEADER: &[u8; 4] = b"IHDR";
+    pub const HEADER: &[u8] = b"IHDR";
 
     #[derive(Debug, Default)]
     pub struct IHDRChunk {
@@ -140,8 +127,7 @@ pub mod ihdr {
             let pixel_size = self.color_type.channel_count() * self.bit_depth;
             let full_pixel_width = self.width as usize * pixel_size as usize;
             let rem = usize::min(1, full_pixel_width % 8);
-            let size = full_pixel_width / 8 + rem as usize + 1;
-            size
+            full_pixel_width / 8 + rem + 1
         }
     }
 
@@ -178,9 +164,9 @@ pub mod ihdr {
         }
     }
 
-    pub fn parse_chunk(input: &[u8]) -> IResult<&[u8], IHDRChunk> {
-        let (rest, chunk_data) = valid_chunk(HEADER)(input)?;
-        let (_, (width, height, other_bytes)) = tuple((be_u32, be_u32, take(5usize)))(chunk_data)?;
+    pub fn parse_data(chunk_data: &[u8]) -> IResult<&[u8], IHDRChunk> {
+        let (rest, (width, height, other_bytes)) =
+            tuple((be_u32, be_u32, take(5usize)))(chunk_data)?;
         Ok((
             rest,
             IHDRChunk {
@@ -197,10 +183,9 @@ pub mod ihdr {
 }
 
 pub mod plte {
-    use super::valid_chunk;
     use nom::IResult;
 
-    pub const HEADER: &[u8; 4] = b"PLTE";
+    pub const HEADER: &[u8] = b"PLTE";
 
     #[allow(non_camel_case_types)]
     #[derive(Debug)]
@@ -218,21 +203,19 @@ pub mod plte {
         }
     }
 
-    pub fn parse_chunk(input: &[u8]) -> IResult<&[u8], PLTEChunk> {
-        let (rest, colors) = valid_chunk(HEADER)(input)?;
-        Ok((rest, PLTEChunk { colors }))
+    pub fn parse_data(chunk_data: &[u8]) -> IResult<&[u8], PLTEChunk> {
+        Ok((&chunk_data[0..0], PLTEChunk { colors: chunk_data }))
     }
 }
 
 mod phys {
-    use super::valid_chunk;
     use nom::{
         number::complete::{be_u32, u8},
         sequence::tuple,
         IResult,
     };
 
-    pub const HEADER: &[u8; 4] = b"pHYs";
+    pub const HEADER: &[u8] = b"pHYs";
 
     #[allow(non_camel_case_types)]
     #[derive(Debug)]
@@ -257,9 +240,8 @@ mod phys {
         }
     }
 
-    pub fn parse_chunk(input: &[u8]) -> IResult<&[u8], pHYsChunk> {
-        let (rest, chunk_data) = valid_chunk(HEADER)(input)?;
-        let (_, (_x_axis_ppu, _y_axis_ppu, _unit_specifier)) =
+    pub fn parse_data(chunk_data: &[u8]) -> IResult<&[u8], pHYsChunk> {
+        let (rest, (_x_axis_ppu, _y_axis_ppu, _unit_specifier)) =
             tuple((be_u32, be_u32, u8))(chunk_data)?;
         Ok((
             rest,
@@ -276,9 +258,7 @@ pub mod idat {
     use crate::crc::calculate_crc;
     use nom::IResult;
 
-    use super::valid_chunk;
-
-    pub const HEADER: &[u8; 4] = b"IDAT";
+    pub const HEADER: &[u8] = b"IDAT";
 
     #[derive(Debug)]
     pub struct IDATChunk<T> {
@@ -299,22 +279,15 @@ pub mod idat {
         }
     }
 
-    pub fn parse_chunk(input: &[u8]) -> IResult<&[u8], IDATChunk<&[u8]>> {
-        let (rest, data) = valid_chunk(HEADER)(input)?;
-        Ok((rest, IDATChunk { data }))
+    pub fn parse_data(chunk_data: &[u8]) -> IResult<&[u8], IDATChunk<&[u8]>> {
+        Ok((&chunk_data[0..0], IDATChunk { data: chunk_data }))
     }
 }
 
 pub mod iend {
-    use nom::{combinator::map, IResult};
-
     use crate::crc::calculate_crc;
 
-    use super::valid_chunk;
-
-    pub fn parse_chunk(input: &[u8]) -> IResult<&[u8], ()> {
-        map(valid_chunk(b"IEND"), |_| ())(input)
-    }
+    pub const HEADER: &[u8] = b"IEND";
 
     pub fn write_end() -> [u8; 12] {
         let mut data = [0, 0, 0, 0, b'I', b'E', b'N', b'D', 0, 0, 0, 0];
