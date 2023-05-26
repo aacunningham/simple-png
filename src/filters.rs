@@ -5,7 +5,7 @@ trait FilterType {
     fn reconstruct(x: u8, a: u8, b: u8, c: u8) -> u8;
 }
 
-pub enum Filter {
+pub(crate) enum Filter {
     None,
     Sub,
     Up,
@@ -14,7 +14,7 @@ pub enum Filter {
 }
 impl Filter {
     #[allow(unused)]
-    pub fn filter(&self, x: u8, a: u8, b: u8, c: u8) -> u8 {
+    pub(crate) fn filter(&self, x: u8, a: u8, b: u8, c: u8) -> u8 {
         match self {
             Filter::None => x,
             Filter::Sub => x.wrapping_sub(a),
@@ -28,7 +28,7 @@ impl Filter {
         }
     }
 
-    pub fn reconstruct(&self, x: u8, a: u8, b: u8, c: u8) -> u8 {
+    pub(crate) fn reconstruct(&self, x: u8, a: u8, b: u8, c: u8) -> u8 {
         match self {
             Filter::None => x,
             Filter::Sub => x.wrapping_add(a),

@@ -70,7 +70,7 @@ fn test_round_trip() {
 #[should_panic]
 fn test_round_trip_2() {
     let p = PNG::decode(FILE).unwrap();
-    let data = PNG::new(p.header.height, p.header.width, &p.pixels).encode();
+    let data = p.encode();
     assert_eq!(FILE, data);
 }
 

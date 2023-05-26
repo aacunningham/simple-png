@@ -14,10 +14,10 @@ use nom::{
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
 pub struct Pixel {
-    pub red: u16,
-    pub green: u16,
-    pub blue: u16,
-    pub alpha: u16,
+    pub(crate) red: u16,
+    pub(crate) green: u16,
+    pub(crate) blue: u16,
+    pub(crate) alpha: u16,
 }
 impl Pixel {
     pub fn new(red: u16, green: u16, blue: u16, alpha: u16) -> Self {
@@ -30,9 +30,9 @@ impl Pixel {
     }
 }
 
-pub struct IndexedPixel(u8);
+struct IndexedPixel(u8);
 impl IndexedPixel {
-    pub fn to_pixel(&self, palette: &PLTEChunk) -> Result<Pixel, anyhow::Error> {
+    fn to_pixel(&self, palette: &PLTEChunk) -> Result<Pixel, anyhow::Error> {
         let (red, green, blue) = palette
             .get_color(self.0)
             .ok_or(anyhow!("color could not be found in palette"))?;
@@ -45,7 +45,7 @@ impl IndexedPixel {
     }
 }
 
-pub fn parse_pixels<'a, I: Iterator<Item = &'a [u8]>>(
+pub(crate) fn parse_pixels<'a, I: Iterator<Item = &'a [u8]>>(
     scanlines: I,
     header: &IHDRChunk,
     palette: Option<&PLTEChunk>,

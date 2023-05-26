@@ -25,6 +25,6 @@ fn update_crc<I: IntoIterator<Item = u8>>(crc: u32, data: I) -> u32 {
     new_crc
 }
 
-pub fn calculate_crc<I: IntoIterator<Item = u8>>(data: I) -> u32 {
+pub(crate) fn calculate_crc<I: IntoIterator<Item = u8>>(data: I) -> u32 {
     update_crc(0xffffffff, data) ^ 0xffffffff
 }

@@ -3,7 +3,7 @@ use miniz_oxide::{deflate::compress_to_vec_zlib, inflate::decompress_to_vec_zlib
 
 use crate::{chunks::ihdr::IHDRChunk, filters::Filter};
 
-pub fn compress_data(data: &mut [u8], ihdr: &IHDRChunk) -> Vec<u8> {
+pub(crate) fn compress_data(data: &mut [u8], ihdr: &IHDRChunk) -> Vec<u8> {
     let pixel_width = ihdr.filter_width() as usize;
     let scanline_size = ihdr.scanline_size();
 
@@ -33,7 +33,7 @@ pub fn compress_data(data: &mut [u8], ihdr: &IHDRChunk) -> Vec<u8> {
     compress_to_vec_zlib(data, 9)
 }
 
-pub fn decompress_data(compressed_data: &[u8], ihdr: &IHDRChunk) -> anyhow::Result<Vec<u8>> {
+pub(crate) fn decompress_data(compressed_data: &[u8], ihdr: &IHDRChunk) -> anyhow::Result<Vec<u8>> {
     let mut data =
         decompress_to_vec_zlib(compressed_data).context("Failed to decompress image data.")?;
     let pixel_width = ihdr.filter_width() as usize;
