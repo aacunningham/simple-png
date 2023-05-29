@@ -70,7 +70,10 @@ impl<'a> Iterator for Adam7ScanlineIter<'a> {
         if let Some(scanline) = self.scanline_iter.as_mut().and_then(Iterator::next) {
             return Some(scanline);
         }
-        if let Some(sub_image) = self.inner_iter.as_mut().and_then(|in_iter| in_iter.next()) {
+        while let Some(sub_image) = self.inner_iter.as_mut().and_then(|in_iter| in_iter.next()) {
+            if sub_image.width == 0 || sub_image.height == 0 {
+                continue;
+            }
             let scanline_length =
                 calculate_scanline_width(sub_image.width as u32, self.header.pixel_width());
             let (sub_image_data, rest): (&'a [u8], &'a [u8]) =

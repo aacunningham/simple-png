@@ -1,6 +1,6 @@
 ---
 source: tests/decoding/main.rs
-expression: png
+expression: "PNG::decode(&input).unwrap()"
 ---
 PNG {
     header: IHDRChunk {
@@ -10,114 +10,60 @@ PNG {
         color_type: IndexedColor,
         compression_method: 0,
         filter_method: 0,
-        interlace_method: 1,
+        interlace_method: Adam7,
     },
     pixels: [
         Pixel {
             red: 0,
-            green: 255,
+            green: 65535,
             blue: 0,
             alpha: 65535,
         },
         Pixel {
             red: 0,
-            green: 255,
+            green: 65535,
             blue: 0,
             alpha: 65535,
         },
         Pixel {
             red: 0,
-            green: 255,
+            green: 65535,
             blue: 0,
             alpha: 65535,
         },
         Pixel {
             red: 0,
-            green: 255,
+            green: 65535,
             blue: 0,
             alpha: 65535,
         },
         Pixel {
-            red: 0,
-            green: 255,
-            blue: 0,
-            alpha: 65535,
-        },
-        Pixel {
-            red: 0,
-            green: 255,
-            blue: 0,
-            alpha: 65535,
-        },
-        Pixel {
-            red: 0,
-            green: 255,
-            blue: 0,
-            alpha: 65535,
-        },
-        Pixel {
-            red: 0,
-            green: 255,
-            blue: 0,
-            alpha: 65535,
-        },
-        Pixel {
-            red: 0,
-            green: 255,
-            blue: 0,
-            alpha: 65535,
-        },
-        Pixel {
-            red: 0,
-            green: 255,
-            blue: 0,
-            alpha: 65535,
-        },
-        Pixel {
-            red: 0,
-            green: 255,
-            blue: 0,
-            alpha: 65535,
-        },
-        Pixel {
-            red: 0,
-            green: 255,
-            blue: 0,
-            alpha: 65535,
-        },
-        Pixel {
-            red: 0,
-            green: 255,
-            blue: 0,
-            alpha: 65535,
-        },
-        Pixel {
-            red: 0,
-            green: 255,
-            blue: 0,
-            alpha: 65535,
-        },
-        Pixel {
-            red: 0,
-            green: 255,
-            blue: 0,
-            alpha: 65535,
-        },
-        Pixel {
-            red: 0,
-            green: 255,
-            blue: 0,
-            alpha: 65535,
-        },
-        Pixel {
-            red: 255,
+            red: 65535,
             green: 0,
-            blue: 255,
+            blue: 65535,
             alpha: 65535,
         },
         Pixel {
             red: 0,
-            green: 255,
+            green: 65535,
+            blue: 0,
+            alpha: 65535,
+        },
+        Pixel {
+            red: 0,
+            green: 65535,
+            blue: 0,
+            alpha: 65535,
+        },
+        Pixel {
+            red: 0,
+            green: 65535,
+            blue: 0,
+            alpha: 65535,
+        },
+        Pixel {
+            red: 0,
+            green: 65535,
             blue: 0,
             alpha: 65535,
         },

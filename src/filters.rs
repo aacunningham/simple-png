@@ -94,6 +94,9 @@ pub(crate) fn filter_scanlines(image_data: &mut [u8], header: &IHDRChunk) {
         Interlacing::Adam7 => {
             let mut image_data_index = 0;
             for sub_image in Adam7Iter::new(header.width as usize, header.height as usize) {
+                if sub_image.width == 0 || sub_image.height == 0 {
+                    continue;
+                }
                 image_data_index += inner_filter_scanlines(
                     &mut image_data[image_data_index..],
                     sub_image.width,
@@ -113,7 +116,6 @@ fn inner_filter_scanlines(
     filter_width: usize,
     pixel_width: usize,
 ) -> usize {
-    dbg!(&image_data, width, line_count, filter_width, pixel_width);
     let scanline_length = div_ceil(width * pixel_width, 8) + 1;
     // assert!(image_data.len() % scanline_length == 0);
 

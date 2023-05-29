@@ -40,9 +40,9 @@ impl IndexedPixel {
             .get_color(self.0)
             .ok_or(anyhow!("color could not be found in palette"))?;
         Ok(Pixel {
-            red: red as u16,
-            green: green as u16,
-            blue: blue as u16,
+            red: scale(red as u16, 8),
+            green: scale(green as u16, 8),
+            blue: scale(blue as u16, 8),
             alpha: u16::MAX,
         })
     }
@@ -204,11 +204,13 @@ fn parse_truecolor_with_alpha(
 fn take_scaled<'a>(
     bit_depth: u8,
 ) -> impl FnMut((&'a [u8], usize)) -> IResult<(&'a [u8], usize), u16> {
-    map(take(bit_depth), move |v: u16| {
-        if bit_depth == 16 {
-            v
-        } else {
-            v * (u16::MAX / (2u16.pow(bit_depth as u32) - 1))
-        }
-    })
+    map(take(bit_depth), move |v: u16| scale(v, bit_depth))
+}
+
+fn scale(value: u16, from_bit_depth: u8) -> u16 {
+    if from_bit_depth == 16 {
+        value
+    } else {
+        value * (u16::MAX / (2u16.pow(from_bit_depth as u32) - 1))
+    }
 }

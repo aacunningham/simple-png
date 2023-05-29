@@ -91,6 +91,7 @@ impl PNG<Vec<Pixel>> {
                 _ => (),
             }
         }
+        dbg!(&palette);
         let scanlines = decompress_data(&data, &header)?;
         let pixels = match header.interlace_method {
             Interlacing::None => parse_pixels_2(
