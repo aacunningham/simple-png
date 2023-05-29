@@ -5,7 +5,7 @@ use crate::{
         idat::IDATChunk,
         iend,
         ihdr::{ColorType, IHDRChunk, Interlacing},
-        iter_chunks, Chunk,
+        iter_chunks, Chunk, ParseableChunk,
     },
     decoder::parse_signature,
     image_data::{compress_data, decompress_data},
@@ -69,7 +69,7 @@ where
         let mut png_data = b"\x89PNG\x0d\x0a\x1a\x0a".to_vec();
         png_data.extend(ihdr.to_bytes());
         png_data.extend(idat.to_bytes());
-        png_data.extend(iend::write_end());
+        png_data.extend(iend::IENDChunk.to_bytes());
         png_data
     }
 }

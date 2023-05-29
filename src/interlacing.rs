@@ -30,8 +30,8 @@ impl Iterator for Adam7Iter {
         let col_start = Self::STARTING_COL[pass];
         let inc_row = Self::ROW_INCREMENT[pass];
         let inc_col = Self::COL_INCREMENT[pass];
-        let pass_width = div_ceil(width - col_start, inc_col);
-        let pass_height = div_ceil(height - row_start, inc_row);
+        let pass_width = div_ceil(width.saturating_sub(col_start), inc_col);
+        let pass_height = div_ceil(width.saturating_sub(row_start), inc_row);
         if pass == 6 {
             self.current_pass = None;
         } else {

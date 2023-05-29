@@ -79,6 +79,7 @@ fn paeth_predictor(a: u8, b: u8, c: u8) -> u8 {
 }
 
 pub(crate) fn filter_scanlines(image_data: &mut [u8], header: &IHDRChunk) {
+    println!("{image_data:?}");
     let pixel_width = header.color_type.channel_count() * header.bit_depth;
     match header.interlace_method {
         Interlacing::None => {
@@ -112,6 +113,7 @@ fn inner_filter_scanlines(
     filter_width: usize,
     pixel_width: usize,
 ) -> usize {
+    dbg!(&image_data, width, line_count, filter_width, pixel_width);
     let scanline_length = div_ceil(width * pixel_width, 8) + 1;
     // assert!(image_data.len() % scanline_length == 0);
 

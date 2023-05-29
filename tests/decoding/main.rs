@@ -16,6 +16,7 @@ macro_rules! png_suite {
                     ".png"
                 ))
                 .unwrap();
+                println!("{input:?}");
                 insta::assert_debug_snapshot!(PNG::decode(&input).unwrap());
             }
             )*
