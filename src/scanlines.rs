@@ -71,6 +71,7 @@ impl<'a> Iterator for Adam7ScanlineIter<'a> {
             return Some(scanline);
         }
         while let Some(sub_image) = self.inner_iter.as_mut().and_then(|in_iter| in_iter.next()) {
+            // TODO: Place this check in the Adam7Iter
             if sub_image.width == 0 || sub_image.height == 0 {
                 continue;
             }
