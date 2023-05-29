@@ -32,11 +32,6 @@ impl Iterator for Adam7Iter {
         let inc_col = Self::COL_INCREMENT[pass];
         let pass_width = div_ceil(width - col_start, inc_col);
         let pass_height = div_ceil(height - row_start, inc_row);
-        let pixel_iter = (row_start..height).step_by(inc_row).flat_map(move |row| {
-            (col_start..width)
-                .step_by(inc_col)
-                .map(move |col| row * height + col)
-        });
         if pass == 6 {
             self.current_pass = None;
         } else {

@@ -146,7 +146,7 @@ pub(crate) mod ihdr {
         }
 
         pub(crate) fn scanline_size(&self) -> usize {
-            div_ceil(self.width as usize * self.pixel_width() as usize, 8) as usize + 1
+            div_ceil(self.width as usize * self.pixel_width() as usize, 8) + 1
         }
     }
 

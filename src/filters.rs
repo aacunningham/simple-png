@@ -125,7 +125,7 @@ fn inner_filter_scanlines(
     }
 
     // Remaining scanlines
-    for i in 1..line_count as usize {
+    for i in 1..line_count {
         let filter = Filter::try_from(image_data[i * scanline_length]).unwrap();
         let (start, stop) = (i * scanline_length + 1, (i + 1) * scanline_length);
         for j in start..(start + filter_width) {

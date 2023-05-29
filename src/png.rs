@@ -9,7 +9,7 @@ use crate::{
     },
     decoder::parse_signature,
     image_data::{compress_data, decompress_data},
-    pixel::{parse_pixels, parse_pixels_2, Pixel},
+    pixel::{parse_pixels_2, Pixel},
     scanlines::{Adam7ScanlineIter, NormalScanline},
 };
 
@@ -104,11 +104,6 @@ impl PNG<Vec<Pixel>> {
                 palette.as_ref(),
             )?,
         };
-        // let pixels = parse_pixels(
-        //     scanlines.chunks(scanline_size).map(|sl| &sl[1..]),
-        //     &header,
-        //     palette.as_ref(),
-        // )?;
         Ok(PNG { header, pixels })
     }
 }
