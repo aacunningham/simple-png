@@ -102,7 +102,7 @@ fn valid_chunk<'a, Error: nom::error::ParseError<&'a [u8]>>(
 }
 
 pub(crate) mod ihdr {
-    use crate::crc::calculate_crc;
+    use crate::{crc::calculate_crc, utils::div_ceil};
     use nom::{bytes::complete::take, number::complete::be_u32, sequence::tuple, IResult};
 
     pub(crate) const HEADER: &[u8; 4] = b"IHDR";
@@ -115,7 +115,7 @@ pub(crate) mod ihdr {
         pub(crate) color_type: ColorType,
         pub(crate) compression_method: u8,
         pub(crate) filter_method: u8,
-        pub(crate) interlace_method: u8,
+        pub(crate) interlace_method: Interlacing,
     }
     impl IHDRChunk {
         pub(crate) fn to_bytes(&self) -> Vec<u8> {
@@ -128,7 +128,7 @@ pub(crate) mod ihdr {
                 self.color_type as u8,
                 self.compression_method,
                 self.filter_method,
-                self.interlace_method,
+                self.interlace_method as u8,
             ]);
             let crc = calculate_crc(bytes[4..].iter().copied()).to_be_bytes();
             bytes.extend(crc);
@@ -141,11 +141,12 @@ pub(crate) mod ihdr {
             channel_count * sample_width
         }
 
+        pub(crate) fn pixel_width(&self) -> u8 {
+            self.color_type.channel_count() * self.bit_depth
+        }
+
         pub(crate) fn scanline_size(&self) -> usize {
-            let pixel_size = self.color_type.channel_count() * self.bit_depth;
-            let full_pixel_width = self.width as usize * pixel_size as usize;
-            let rem = usize::min(1, full_pixel_width % 8);
-            full_pixel_width / 8 + rem + 1
+            div_ceil(self.width as usize * self.pixel_width() as usize, 8) as usize + 1
         }
     }
 
@@ -171,13 +172,28 @@ pub(crate) mod ihdr {
         }
     }
     impl ColorType {
-        fn channel_count(&self) -> u8 {
+        pub(crate) fn channel_count(&self) -> u8 {
             match self {
                 Self::Greyscale => 1,
                 Self::IndexedColor => 1,
                 Self::GreyscaleWithAlpha => 2,
                 Self::Truecolor => 3,
                 Self::TruecolorWithAlpha => 4,
+            }
+        }
+    }
+    #[derive(Debug, Default, Clone, Copy)]
+    pub(crate) enum Interlacing {
+        #[default]
+        None,
+        Adam7,
+    }
+    impl From<u8> for Interlacing {
+        fn from(value: u8) -> Self {
+            match value {
+                0 => Self::None,
+                1 => Self::Adam7,
+                _ => panic!(),
             }
         }
     }
@@ -194,7 +210,7 @@ pub(crate) mod ihdr {
                 color_type: other_bytes[1].into(),
                 compression_method: other_bytes[2],
                 filter_method: other_bytes[3],
-                interlace_method: other_bytes[4],
+                interlace_method: other_bytes[4].into(),
             },
         ))
     }

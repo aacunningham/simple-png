@@ -10,7 +10,7 @@ PNG {
         color_type: TruecolorWithAlpha,
         compression_method: 0,
         filter_method: 0,
-        interlace_method: 0,
+        interlace_method: None,
     },
     pixels: [
         Pixel {

@@ -4,12 +4,13 @@ use crate::{
     chunks::{
         idat::IDATChunk,
         iend,
-        ihdr::{ColorType, IHDRChunk},
+        ihdr::{ColorType, IHDRChunk, Interlacing},
         iter_chunks, Chunk,
     },
     decoder::parse_signature,
     image_data::{compress_data, decompress_data},
-    pixel::{parse_pixels, Pixel},
+    pixel::{parse_pixels, parse_pixels_2, Pixel},
+    scanlines::{Adam7ScanlineIter, NormalScanline},
 };
 
 #[derive(Debug)]
@@ -33,7 +34,7 @@ where
             color_type: ColorType::TruecolorWithAlpha,
             filter_method: 0,
             compression_method: 0,
-            interlace_method: 0,
+            interlace_method: Interlacing::None,
         };
         Self {
             header: ihdr,
@@ -49,7 +50,7 @@ where
             color_type: ColorType::TruecolorWithAlpha,
             filter_method: 0,
             compression_method: 0,
-            interlace_method: 0,
+            interlace_method: Interlacing::None,
         };
         let mut data = Vec::with_capacity((ihdr.height + ihdr.height * ihdr.width * 4) as usize);
         for line in self.pixels.as_ref().chunks(ihdr.width as usize) {
@@ -91,12 +92,23 @@ impl PNG<Vec<Pixel>> {
             }
         }
         let scanlines = decompress_data(&data, &header)?;
-        let scanline_size = header.scanline_size();
-        let pixels = parse_pixels(
-            scanlines.chunks(scanline_size).map(|sl| &sl[1..]),
-            &header,
-            palette.as_ref(),
-        )?;
+        let pixels = match header.interlace_method {
+            Interlacing::None => parse_pixels_2(
+                NormalScanline::new(&scanlines, &header),
+                &header,
+                palette.as_ref(),
+            )?,
+            Interlacing::Adam7 => parse_pixels_2(
+                Adam7ScanlineIter::new(&scanlines, &header),
+                &header,
+                palette.as_ref(),
+            )?,
+        };
+        // let pixels = parse_pixels(
+        //     scanlines.chunks(scanline_size).map(|sl| &sl[1..]),
+        //     &header,
+        //     palette.as_ref(),
+        // )?;
         Ok(PNG { header, pixels })
     }
 }

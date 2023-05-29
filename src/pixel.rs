@@ -1,13 +1,16 @@
-use crate::chunks::{
-    ihdr::{ColorType, IHDRChunk},
-    plte::PLTEChunk,
+use crate::{
+    chunks::{
+        ihdr::{ColorType, IHDRChunk, Interlacing},
+        plte::PLTEChunk,
+    },
+    scanlines::{Adam7ScanlineIter, NormalScanline, ScanlineIterator},
 };
 use anyhow::anyhow;
 use nom::{
     bits::{bits, complete::take},
     combinator::map,
     error::Error,
-    multi::count,
+    multi::{count, many0},
     sequence::tuple,
     IResult,
 };
@@ -102,6 +105,72 @@ pub(crate) fn parse_pixels<'a, I: Iterator<Item = &'a [u8]>>(
         all_pixels.extend(pixels);
     }
     Ok(all_pixels)
+}
+
+pub(crate) fn parse_scanline_pixels(
+    scanline: &[u8],
+    color_type: ColorType,
+    bit_depth: u8,
+    palette: Option<&PLTEChunk>,
+) -> anyhow::Result<Vec<Pixel>> {
+    let pixels = match color_type {
+        ColorType::Greyscale => {
+            bits::<_, _, Error<(&[u8], usize)>, Error<&[u8]>, _>(many0(parse_greyscale(bit_depth)))(
+                &scanline[1..],
+            )
+            .map_err(|e| e.to_owned())?
+            .1
+        }
+        ColorType::IndexedColor => bits::<_, _, Error<(&[u8], usize)>, Error<&[u8]>, _>(many0(
+            parse_indexed_color(bit_depth),
+        ))(&scanline[1..])
+        .map_err(|e| e.to_owned())?
+        .1
+        .into_iter()
+        .map(|p| {
+            palette
+                .ok_or(anyhow!("A pLTe chunk is needed for IndexedColor type"))
+                .and_then(|plte| p.to_pixel(plte))
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?,
+        ColorType::GreyscaleWithAlpha => {
+            bits::<_, _, Error<(&[u8], usize)>, Error<&[u8]>, _>(many0(parse_greyscale_with_alpha(
+                bit_depth,
+            )))(&scanline[1..])
+            .map_err(|e| e.to_owned())?
+            .1
+        }
+        ColorType::Truecolor => {
+            bits::<_, _, Error<(&[u8], usize)>, Error<&[u8]>, _>(many0(parse_truecolor(bit_depth)))(
+                &scanline[1..],
+            )
+            .map_err(|e| e.to_owned())?
+            .1
+        }
+        ColorType::TruecolorWithAlpha => {
+            bits::<_, _, Error<(&[u8], usize)>, Error<&[u8]>, _>(many0(parse_truecolor_with_alpha(
+                bit_depth,
+            )))(&scanline[1..])
+            .map_err(|e| e.to_owned())?
+            .1
+        }
+    };
+    Ok(pixels)
+}
+
+pub(crate) fn parse_pixels_2<'a, S: ScanlineIterator<'a>>(
+    iterator: S,
+    header: &IHDRChunk,
+    palette: Option<&PLTEChunk>,
+) -> anyhow::Result<Vec<Pixel>> {
+    let mut total = vec![Pixel::default(); header.width as usize * header.height as usize];
+    for (scanline, pixel_indices) in iterator {
+        let pixels = parse_scanline_pixels(scanline, header.color_type, header.bit_depth, palette)?;
+        for (index, pixel) in pixel_indices.into_iter().zip(pixels.into_iter()) {
+            total[index] = pixel;
+        }
+    }
+    Ok(total)
 }
 
 fn parse_greyscale(bit_depth: u8) -> impl Fn((&[u8], usize)) -> IResult<(&[u8], usize), Pixel> {

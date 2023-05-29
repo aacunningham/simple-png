@@ -16,9 +16,7 @@ macro_rules! png_suite {
                     ".png"
                 ))
                 .unwrap();
-                println!("{:?}", input);
-                let png = PNG::decode(&input).unwrap();
-                insta::assert_debug_snapshot!(png);
+                insta::assert_debug_snapshot!(PNG::decode(&input).unwrap());
             }
             )*
         }
@@ -70,7 +68,7 @@ fn test_round_trip() {
 #[should_panic]
 fn test_round_trip_2() {
     let p = PNG::decode(FILE).unwrap();
-    let data = p.encode();
+    let data = PNG::new(p.header.height, p.header.width, &p.pixels).encode();
     assert_eq!(FILE, data);
 }
 
@@ -89,13 +87,13 @@ png_suite!(
     s06n3p02, s07n3p02, s08n3p02, s09n3p02, s32n3p04, s33n3p04, s34n3p04, s35n3p04, s36n3p04,
     s37n3p04, s38n3p04, s39n3p04, s40n3p04, tbbn0g04, tbbn2c16, tbbn3p08, tbgn2c16, tbgn3p08,
     tbrn2c08, tbwn0g16, tbwn3p08, tbyn3p08, tm3n3p02, tp0n0g08, tp0n2c08, tp0n3p08, tp1n3p08,
-    z00n2c08, z03n2c08, z06n2c08, z09n2c08
+    z00n2c08, z03n2c08, z06n2c08, z09n2c08, basi0g01, basi0g02, basi0g04, basi0g08, basi0g16,
+    basi2c08, basi2c16, basi3p01, basi3p02, basi3p04, basi3p08, basi4a08, basi4a16, basi6a08,
+    basi6a16, bgai4a08, bgai4a16, s05i3p02, s06i3p02, s07i3p02, s08i3p02, s09i3p02, s32i3p04,
+    s33i3p04, s34i3p04, s35i3p04, s36i3p04, s37i3p04, s38i3p04, s39i3p04, s40i3p04
 );
 
 png_suite_fail!(
     xc1n0g08, xc9n2c08, xcrn0g04, xcsn0g01, xd0n2c08, xd3n2c08, xd9n2c08, xdtn0g01, xhdn0g08,
-    xlfn0g04, xs1n0g01, xs2n0g01, xs4n0g01, xs7n0g01, basi0g01, basi0g02, basi0g04, basi0g08,
-    basi0g16, basi2c08, basi2c16, basi3p01, basi3p02, basi3p04, basi3p08, basi4a08, basi4a16,
-    basi6a08, basi6a16, bgai4a08, bgai4a16, s05i3p02, s06i3p02, s07i3p02, s08i3p02, s09i3p02,
-    s32i3p04, s33i3p04, s34i3p04, s35i3p04, s36i3p04, s37i3p04, s38i3p04, s39i3p04, s40i3p04
+    xlfn0g04, xs1n0g01, xs2n0g01, xs4n0g01, xs7n0g01
 );

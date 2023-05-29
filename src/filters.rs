@@ -1,5 +1,13 @@
 use anyhow::anyhow;
 
+use crate::{
+    chunks::ihdr::{IHDRChunk, Interlacing},
+    interlacing::Adam7Iter,
+    utils::div_ceil,
+};
+
+pub const FILTER_SIZE_BYTES: u8 = 1;
+
 trait FilterType {
     fn filter(x: u8, a: u8, b: u8, c: u8) -> u8;
     fn reconstruct(x: u8, a: u8, b: u8, c: u8) -> u8;
@@ -68,4 +76,68 @@ fn paeth_predictor(a: u8, b: u8, c: u8) -> u8 {
     } else {
         c
     }
+}
+
+pub(crate) fn filter_scanlines(image_data: &mut [u8], header: &IHDRChunk) {
+    let pixel_width = header.color_type.channel_count() * header.bit_depth;
+    match header.interlace_method {
+        Interlacing::None => {
+            inner_filter_scanlines(
+                image_data,
+                header.width as usize,
+                header.height as usize,
+                header.filter_width() as usize,
+                pixel_width as usize,
+            );
+        }
+        Interlacing::Adam7 => {
+            let mut image_data_index = 0;
+            for sub_image in Adam7Iter::new(header.width as usize, header.height as usize) {
+                image_data_index += inner_filter_scanlines(
+                    &mut image_data[image_data_index..],
+                    sub_image.width,
+                    sub_image.height,
+                    header.filter_width() as usize,
+                    pixel_width as usize,
+                );
+            }
+        }
+    };
+}
+
+fn inner_filter_scanlines(
+    image_data: &mut [u8],
+    width: usize,
+    line_count: usize,
+    filter_width: usize,
+    pixel_width: usize,
+) -> usize {
+    let scanline_length = div_ceil(width * pixel_width, 8) + 1;
+    // assert!(image_data.len() % scanline_length == 0);
+
+    // Handle first scanline as special case
+    let filter = Filter::try_from(image_data[0]).unwrap();
+    for b in image_data[1..(filter_width + 1)].iter_mut() {
+        *b = filter.reconstruct(*b, 0, 0, 0);
+    }
+    for i in (filter_width + 1)..scanline_length {
+        image_data[i] = filter.reconstruct(image_data[i], image_data[i - filter_width], 0, 0);
+    }
+
+    // Remaining scanlines
+    for i in 1..line_count as usize {
+        let filter = Filter::try_from(image_data[i * scanline_length]).unwrap();
+        let (start, stop) = (i * scanline_length + 1, (i + 1) * scanline_length);
+        for j in start..(start + filter_width) {
+            image_data[j] =
+                filter.reconstruct(image_data[j], 0, image_data[j - scanline_length], 0);
+        }
+        for j in (start + filter_width)..stop {
+            let a = image_data[j - filter_width];
+            let b = image_data[j - scanline_length];
+            let c = image_data[j - filter_width - scanline_length];
+            image_data[j] = filter.reconstruct(image_data[j], a, b, c);
+        }
+    }
+    scanline_length * line_count
 }
