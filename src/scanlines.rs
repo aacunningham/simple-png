@@ -11,10 +11,6 @@ pub(crate) trait ScanlineIterator<'a>: Iterator<Item = (&'a [u8], Vec<usize>)> {
 impl<'a> ScanlineIterator<'a> for NormalScanline<'a> {}
 impl<'a> ScanlineIterator<'a> for Adam7ScanlineIter<'a> {}
 
-pub(crate) const fn calculate_scanline_width(image_width: u32, pixel_width: u8) -> usize {
-    div_ceil(image_width as usize * pixel_width as usize, 8) + FILTER_SIZE_BYTES as usize
-}
-
 pub(crate) struct NormalScanline<'a> {
     scanline_iter: std::slice::Chunks<'a, u8>,
     counter: RangeFrom<usize>,
@@ -118,4 +114,8 @@ impl<T> IteratorExt<T> for T {
     fn vec_chunks(self, size: usize) -> ChunkIter<T> {
         ChunkIter { inner: self, size }
     }
+}
+
+const fn calculate_scanline_width(image_width: u32, pixel_width: u8) -> usize {
+    div_ceil(image_width as usize * pixel_width as usize, 8) + FILTER_SIZE_BYTES as usize
 }

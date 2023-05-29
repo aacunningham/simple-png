@@ -1,5 +1,3 @@
-use anyhow::anyhow;
-
 use crate::{
     chunks::{
         idat::IDATChunk,
@@ -7,11 +5,16 @@ use crate::{
         ihdr::{ColorType, IHDRChunk, Interlacing},
         iter_chunks, Chunk, ParseableChunk,
     },
-    decoder::parse_signature,
     image_data::{compress_data, decompress_data},
     pixel::{parse_pixels_2, Pixel},
     scanlines::{Adam7ScanlineIter, NormalScanline},
 };
+use anyhow::anyhow;
+use nom::{bytes::complete::tag, IResult};
+
+fn parse_signature(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    tag(b"\x89PNG\x0d\x0a\x1a\x0a")(input)
+}
 
 #[derive(Debug)]
 pub struct PNG<T>
