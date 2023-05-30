@@ -1,6 +1,5 @@
 mod chunks;
 mod filters;
-mod image_data;
 mod interlacing;
 mod pixel;
 mod png;

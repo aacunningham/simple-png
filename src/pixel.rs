@@ -99,7 +99,7 @@ pub(crate) fn parse_scanline_pixels(
     Ok(pixels)
 }
 
-pub(crate) fn parse_pixels_2<'a, S: ScanlineIterator<'a>>(
+pub(crate) fn parse_pixels<'a, S: ScanlineIterator<'a>>(
     iterator: S,
     header: &IHDRChunk,
     palette: Option<&PLTEChunk>,

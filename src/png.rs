@@ -5,11 +5,12 @@ use crate::{
         ihdr::{ColorType, IHDRChunk, Interlacing},
         iter_chunks, Chunk, ParseableChunk,
     },
-    image_data::{compress_data, decompress_data},
-    pixel::{parse_pixels_2, Pixel},
+    filters::{filter_scanlines, reconstruct_scanlines},
+    pixel::{parse_pixels, Pixel},
     scanlines::{Adam7ScanlineIter, NormalScanline},
 };
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
+use miniz_oxide::{deflate::compress_to_vec_zlib, inflate::decompress_to_vec_zlib};
 use nom::{bytes::complete::tag, IResult};
 
 fn parse_signature(input: &[u8]) -> IResult<&[u8], &[u8]> {
@@ -46,7 +47,7 @@ where
     }
 
     pub fn encode(&self) -> Vec<u8> {
-        let ihdr = IHDRChunk {
+        let header = IHDRChunk {
             height: self.header.height,
             width: self.header.width,
             bit_depth: 16,
@@ -55,8 +56,9 @@ where
             compression_method: 0,
             interlace_method: Interlacing::None,
         };
-        let mut data = Vec::with_capacity((ihdr.height + ihdr.height * ihdr.width * 4) as usize);
-        for line in self.pixels.as_ref().chunks(ihdr.width as usize) {
+        let mut data =
+            Vec::with_capacity((header.height + header.height * header.width * 4) as usize);
+        for line in self.pixels.as_ref().chunks(header.width as usize) {
             data.push(0);
             for p in line {
                 data.extend(p.red.to_be_bytes());
@@ -65,12 +67,13 @@ where
                 data.extend(p.alpha.to_be_bytes());
             }
         }
-        let compressed_data = compress_data(&mut data, &ihdr);
+        filter_scanlines(&mut data, &header);
+        let compressed_data = compress_to_vec_zlib(&mut data, 9);
         let idat = IDATChunk {
             data: &compressed_data,
         };
         let mut png_data = b"\x89PNG\x0d\x0a\x1a\x0a".to_vec();
-        png_data.extend(ihdr.to_bytes());
+        png_data.extend(header.to_bytes());
         png_data.extend(idat.to_bytes());
         png_data.extend(iend::IENDChunk.to_bytes());
         png_data
@@ -94,15 +97,17 @@ impl PNG<Vec<Pixel>> {
                 _ => (),
             }
         }
-        let scanlines = decompress_data(&data, &header)?;
+        let mut decompressed_data =
+            decompress_to_vec_zlib(&data).context("Failed to decompress image data.")?;
+        reconstruct_scanlines(&mut decompressed_data, &header);
         let pixels = match header.interlace_method {
-            Interlacing::None => parse_pixels_2(
-                NormalScanline::new(&scanlines, &header),
+            Interlacing::None => parse_pixels(
+                NormalScanline::new(&decompressed_data, &header),
                 &header,
                 palette.as_ref(),
             )?,
-            Interlacing::Adam7 => parse_pixels_2(
-                Adam7ScanlineIter::new(&scanlines, &header),
+            Interlacing::Adam7 => parse_pixels(
+                Adam7ScanlineIter::new(&decompressed_data, &header),
                 &header,
                 palette.as_ref(),
             )?,
