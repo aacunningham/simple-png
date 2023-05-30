@@ -1,10 +1,9 @@
+use super::ParseableChunk;
 use nom::{
     number::complete::{be_u32, u8},
     sequence::tuple,
     IResult,
 };
-
-use super::ParseableChunk;
 
 #[allow(non_camel_case_types)]
 #[derive(Debug)]

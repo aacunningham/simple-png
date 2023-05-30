@@ -7,8 +7,7 @@ use nom::{
     IResult,
 };
 
-use crate::crc::calculate_crc;
-
+mod crc;
 pub(crate) mod idat;
 pub(crate) mod iend;
 pub(crate) mod ihdr;
@@ -101,7 +100,7 @@ fn valid_chunk<'a, Error: nom::error::ParseError<&'a [u8]>>(
 ) -> IResult<&'a [u8], (&'a [u8; 4], &'a [u8]), Error> {
     let (header_length, crc_length) = (4, 4);
     let (input, chunk_data) = length_data(map(be_u32, |v| v + header_length + crc_length))(input)?;
-    let crc = calculate_crc(
+    let crc = crc::calculate_crc(
         chunk_data[0..chunk_data.len() - crc_length as usize]
             .iter()
             .copied(),

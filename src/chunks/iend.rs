@@ -1,6 +1,4 @@
-use crate::crc::calculate_crc;
-
-use super::ParseableChunk;
+use super::{crc::calculate_crc, ParseableChunk};
 
 pub(crate) struct IENDChunk;
 impl<'a> ParseableChunk<'a> for IENDChunk {

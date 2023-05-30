@@ -24,28 +24,38 @@ impl Adam7Iter {
 impl Iterator for Adam7Iter {
     type Item = SubImage;
     fn next(&mut self) -> Option<Self::Item> {
-        let pass = self.current_pass?;
-        let (width, height) = (self.width, self.height);
-        let row_start = Self::STARTING_ROW[pass];
-        let col_start = Self::STARTING_COL[pass];
-        let inc_row = Self::ROW_INCREMENT[pass];
-        let inc_col = Self::COL_INCREMENT[pass];
-        let pass_width = div_ceil(width.saturating_sub(col_start), inc_col);
-        let pass_height = div_ceil(width.saturating_sub(row_start), inc_row);
-        if pass == 6 {
-            self.current_pass = None;
-        } else {
-            self.current_pass = Some(pass + 1);
+        let mut pass = self.current_pass?;
+        while pass < 7 {
+            let pass_width = div_ceil(
+                self.width.saturating_sub(Self::STARTING_COL[pass]),
+                Self::COL_INCREMENT[pass],
+            );
+            let pass_height = div_ceil(
+                self.height.saturating_sub(Self::STARTING_ROW[pass]),
+                Self::ROW_INCREMENT[pass],
+            );
+            // If either is zero, the sub image has no pixels and we can go to the next image.
+            if pass_width == 0 || pass_height == 0 {
+                pass += 1;
+                continue;
+            }
+            if pass == 6 {
+                self.current_pass = None;
+            } else {
+                self.current_pass = Some(pass + 1);
+            }
+            return Some(SubImage {
+                width: pass_width,
+                height: pass_height,
+                pixel_indices: PixelIndicesIter::new(
+                    (Self::STARTING_ROW[pass]..self.height).step_by(Self::ROW_INCREMENT[pass]),
+                    (Self::STARTING_COL[pass]..self.width).step_by(Self::COL_INCREMENT[pass]),
+                    self.height,
+                ),
+            });
         }
-        Some(SubImage {
-            width: pass_width,
-            height: pass_height,
-            pixel_indices: PixelIndicesIter::new(
-                (row_start..height).step_by(inc_row),
-                (col_start..width).step_by(inc_col),
-                height,
-            ),
-        })
+        self.current_pass = None;
+        None
     }
 }
 
@@ -116,7 +126,7 @@ mod tests {
         }
 
         let adam7 = Adam7Iter::new(4, 4);
-        let expected_dimensions = [(1, 1), (0, 1), (1, 0), (1, 1), (2, 1), (2, 2), (4, 2)];
+        let expected_dimensions = [(1, 1), (1, 1), (2, 1), (2, 2), (4, 2)];
         for (pass, expected) in adam7.zip(expected_dimensions) {
             assert_eq!((pass.width, pass.height), expected);
         }
@@ -148,7 +158,7 @@ mod tests {
         }
 
         let adam7 = Adam7Iter::new(4, 4);
-        let expected_lengths = [1, 0, 0, 1, 2, 4, 8];
+        let expected_lengths = [1, 1, 2, 4, 8];
         for (pass, expected) in adam7.zip(expected_lengths) {
             assert_eq!(pass.pixel_indices.count(), expected);
         }

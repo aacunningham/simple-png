@@ -1,7 +1,5 @@
-use crate::{crc::calculate_crc, utils::div_ceil};
+use super::{crc::calculate_crc, ParseableChunk};
 use nom::{bytes::complete::take, number::complete::be_u32, sequence::tuple, IResult};
-
-use super::ParseableChunk;
 
 #[derive(Debug, Default)]
 pub struct IHDRChunk {
@@ -22,10 +20,6 @@ impl IHDRChunk {
 
     pub(crate) fn pixel_width(&self) -> u8 {
         self.color_type.channel_count() * self.bit_depth
-    }
-
-    pub(crate) fn scanline_size(&self) -> usize {
-        div_ceil(self.width as usize * self.pixel_width() as usize, 8) + 1
     }
 }
 impl<'a> ParseableChunk<'a> for IHDRChunk {

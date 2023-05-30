@@ -1,5 +1,4 @@
 mod chunks;
-mod crc;
 mod filters;
 mod image_data;
 mod interlacing;

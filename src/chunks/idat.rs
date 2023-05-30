@@ -1,7 +1,5 @@
-use crate::crc::calculate_crc;
+use super::{crc::calculate_crc, ParseableChunk};
 use nom::IResult;
-
-use super::ParseableChunk;
 
 #[derive(Debug)]
 pub(crate) struct IDATChunk<'a> {

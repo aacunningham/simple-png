@@ -1,6 +1,5 @@
-use nom::IResult;
-
 use super::ParseableChunk;
+use nom::IResult;
 
 #[allow(non_camel_case_types)]
 #[derive(Debug)]
