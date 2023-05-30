@@ -79,16 +79,15 @@ fn paeth_predictor(a: u8, b: u8, c: u8) -> u8 {
 }
 
 pub(crate) fn filter_scanlines(image_data: &mut [u8], header: &IHDRChunk) {
-    println!("{image_data:?}");
     let pixel_width = header.color_type.channel_count() * header.bit_depth;
     match header.interlace_method {
         Interlacing::None => {
+            let scanline_length = div_ceil(header.width as usize * pixel_width as usize, 8) + 1;
             inner_filter_scanlines(
                 image_data,
-                header.width as usize,
+                scanline_length,
                 header.height as usize,
                 header.filter_width() as usize,
-                pixel_width as usize,
             );
         }
         Interlacing::Adam7 => {
@@ -98,12 +97,13 @@ pub(crate) fn filter_scanlines(image_data: &mut [u8], header: &IHDRChunk) {
                 if sub_image.width == 0 || sub_image.height == 0 {
                     continue;
                 }
+                let scanline_length = div_ceil(sub_image.width * pixel_width as usize, 8) + 1;
                 image_data_index += inner_filter_scanlines(
-                    &mut image_data[image_data_index..],
-                    sub_image.width,
+                    &mut image_data
+                        [image_data_index..(image_data_index + scanline_length * sub_image.height)],
+                    scanline_length,
                     sub_image.height,
                     header.filter_width() as usize,
-                    pixel_width as usize,
                 );
             }
         }
@@ -112,13 +112,11 @@ pub(crate) fn filter_scanlines(image_data: &mut [u8], header: &IHDRChunk) {
 
 fn inner_filter_scanlines(
     image_data: &mut [u8],
-    width: usize,
+    scanline_length: usize,
     line_count: usize,
     filter_width: usize,
-    pixel_width: usize,
 ) -> usize {
-    let scanline_length = div_ceil(width * pixel_width, 8) + 1;
-    // assert!(image_data.len() % scanline_length == 0);
+    assert!(image_data.len() % scanline_length == 0);
 
     // Handle first scanline as special case
     let filter = Filter::try_from(image_data[0]).unwrap();
