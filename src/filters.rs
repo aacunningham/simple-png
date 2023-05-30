@@ -6,13 +6,6 @@ use crate::{
     utils::div_ceil,
 };
 
-pub const FILTER_SIZE_BYTES: u8 = 1;
-
-trait FilterType {
-    fn filter(x: u8, a: u8, b: u8, c: u8) -> u8;
-    fn reconstruct(x: u8, a: u8, b: u8, c: u8) -> u8;
-}
-
 pub(crate) enum Filter {
     None,
     Sub,
@@ -78,12 +71,12 @@ fn paeth_predictor(a: u8, b: u8, c: u8) -> u8 {
     }
 }
 
-pub(crate) fn filter_scanlines(image_data: &mut [u8], header: &IHDRChunk) {
+pub(crate) fn reconstruct_scanlines(image_data: &mut [u8], header: &IHDRChunk) {
     let pixel_width = header.color_type.channel_count() * header.bit_depth;
     match header.interlace_method {
         Interlacing::None => {
             let scanline_length = div_ceil(header.width as usize * pixel_width as usize, 8) + 1;
-            inner_filter_scanlines(
+            inner_reconstruct_scanlines(
                 image_data,
                 scanline_length,
                 header.height as usize,
@@ -98,7 +91,7 @@ pub(crate) fn filter_scanlines(image_data: &mut [u8], header: &IHDRChunk) {
                     continue;
                 }
                 let scanline_length = div_ceil(sub_image.width * pixel_width as usize, 8) + 1;
-                image_data_index += inner_filter_scanlines(
+                image_data_index += inner_reconstruct_scanlines(
                     &mut image_data
                         [image_data_index..(image_data_index + scanline_length * sub_image.height)],
                     scanline_length,
@@ -110,7 +103,7 @@ pub(crate) fn filter_scanlines(image_data: &mut [u8], header: &IHDRChunk) {
     };
 }
 
-fn inner_filter_scanlines(
+fn inner_reconstruct_scanlines(
     image_data: &mut [u8],
     scanline_length: usize,
     line_count: usize,

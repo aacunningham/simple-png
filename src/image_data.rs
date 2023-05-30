@@ -3,7 +3,7 @@ use miniz_oxide::{deflate::compress_to_vec_zlib, inflate::decompress_to_vec_zlib
 
 use crate::{
     chunks::ihdr::IHDRChunk,
-    filters::{filter_scanlines, Filter},
+    filters::{reconstruct_scanlines, Filter},
 };
 
 pub(crate) fn compress_data(data: &mut [u8], header: &IHDRChunk) -> Vec<u8> {
@@ -42,7 +42,7 @@ pub(crate) fn decompress_data(
 ) -> anyhow::Result<Vec<u8>> {
     let mut data =
         decompress_to_vec_zlib(compressed_data).context("Failed to decompress image data.")?;
-    filter_scanlines(&mut data, header);
+    reconstruct_scanlines(&mut data, header);
 
     Ok(data)
 }

@@ -2,7 +2,6 @@ use std::ops::RangeFrom;
 
 use crate::{
     chunks::ihdr::IHDRChunk,
-    filters::FILTER_SIZE_BYTES,
     interlacing::{Adam7Iter, PixelIndicesIter},
     utils::div_ceil,
 };
@@ -117,5 +116,5 @@ impl<T> IteratorExt<T> for T {
 }
 
 const fn calculate_scanline_width(image_width: u32, pixel_width: u8) -> usize {
-    div_ceil(image_width as usize * pixel_width as usize, 8) + FILTER_SIZE_BYTES as usize
+    div_ceil(image_width as usize * pixel_width as usize, 8) + 1
 }
