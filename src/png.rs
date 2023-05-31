@@ -68,7 +68,7 @@ where
             }
         }
         filter_scanlines(&mut data, &header);
-        let compressed_data = compress_to_vec_zlib(&mut data, 9);
+        let compressed_data = compress_to_vec_zlib(&data, 9);
         let idat = IDATChunk {
             data: &compressed_data,
         };
