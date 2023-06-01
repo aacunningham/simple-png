@@ -21,6 +21,8 @@ fn main() -> anyhow::Result<()> {
                     .map(|file_name| file_name.starts_with('x'))
                     .unwrap_or(true)
         });
+    let mut processed_images = Vec::with_capacity(test_images.size_hint().1.unwrap_or(50));
+
     for image in test_images {
         let image_path = image.path();
         let test_name = image_path
@@ -43,6 +45,14 @@ fn main() -> anyhow::Result<()> {
                 ))?
                 .encode(),
         )?;
+        processed_images.push(test_name.to_owned());
     }
+    let now = time::OffsetDateTime::now_utc()
+        .format(&time::format_description::well_known::Iso8601::DEFAULT)?;
+    let results = serde_json::json!({
+        "date": now,
+        "processed_images": processed_images,
+    });
+    fs::write(output_dir.join("test_results.json"), results.to_string())?;
     Ok(())
 }

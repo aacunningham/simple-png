@@ -23,7 +23,7 @@ impl Filter {
             Filter::Average => {
                 let a = a as u16;
                 let b = b as u16;
-                x.wrapping_sub((a + b / 2) as u8)
+                x.wrapping_sub(((a + b) / 2) as u8)
             }
             Filter::Paeth => x.wrapping_sub(paeth_predictor(a, b, c)),
         }
@@ -37,7 +37,7 @@ impl Filter {
             Filter::Average => {
                 let a = a as u16;
                 let b = b as u16;
-                x.wrapping_add((a + b / 2) as u8)
+                x.wrapping_add(((a + b) / 2) as u8)
             }
             Filter::Paeth => x.wrapping_add(paeth_predictor(a, b, c)),
         }
@@ -106,8 +106,10 @@ fn inner_reconstruct_scanlines(
     filter_width: usize,
 ) -> usize {
     assert!(image_data.len() % scanline_length == 0);
+    log::info!("{:?}", filter_width);
 
     // Handle first scanline as special case
+    log::info!("Scanline: {:?}", &image_data[0..scanline_length]);
     let filter = Filter::try_from(image_data[0]).unwrap();
     for b in image_data[1..(filter_width + 1)].iter_mut() {
         *b = filter.reconstruct(*b, 0, 0, 0);
@@ -115,6 +117,7 @@ fn inner_reconstruct_scanlines(
     for i in (filter_width + 1)..scanline_length {
         image_data[i] = filter.reconstruct(image_data[i], image_data[i - filter_width], 0, 0);
     }
+    log::info!("Scanline: {:?}", &image_data[0..scanline_length]);
 
     // Remaining scanlines
     for i in 1..line_count {
@@ -130,6 +133,7 @@ fn inner_reconstruct_scanlines(
             let c = image_data[j - filter_width - scanline_length];
             image_data[j] = filter.reconstruct(image_data[j], a, b, c);
         }
+        // log::info!("Scanline: {:?}", &image_data[(i * scanline_length)..stop]);
     }
     scanline_length * line_count
 }
@@ -174,6 +178,7 @@ fn inner_filter_scanlines(
     for i in (1..line_count).rev() {
         image_data[i * scanline_length] = Filter::Sub as u8;
         let (start, stop) = (i * scanline_length + 1, (i + 1) * scanline_length);
+        // log::info!("Scanline: {:?}", &image_data[(i * scanline_length)..stop]);
         for j in start..(start + filter_width) {
             image_data[j] = Filter::Sub.filter(image_data[j], 0, image_data[j - filter_width], 0);
         }
@@ -185,6 +190,7 @@ fn inner_filter_scanlines(
         }
     }
 
+    // log::info!("Scanline: {:?}", &image_data[0..scanline_length]);
     // "First" scanline can be treated differently
     for i in ((filter_width + 1)..scanline_length).rev() {
         image_data[i] = Filter::Sub.filter(image_data[i], image_data[i - filter_width], 0, 0)
@@ -199,7 +205,7 @@ fn inner_filter_scanlines(
 
 #[cfg(test)]
 mod tests {
-    use super::{inner_filter_scanlines, inner_reconstruct_scanlines};
+    use super::{inner_filter_scanlines, inner_reconstruct_scanlines, Filter};
 
     #[test]
     fn reconstruct_undoes_filter() {
@@ -259,5 +265,12 @@ mod tests {
         inner_filter_scanlines(data, 257, 2, 8);
         inner_reconstruct_scanlines(data, 257, 2, 8);
         assert_eq!(data, &orig_copy);
+    }
+
+    #[test]
+    fn average_actually_averages_a_and_b() {
+        assert_eq!(Filter::Average.filter(50, 50, 50, 0), 0);
+        assert_eq!(Filter::Average.filter(75, 100, 50, 0), 0);
+        assert_eq!(Filter::Average.filter(254, 255, 253, 0), 0);
     }
 }

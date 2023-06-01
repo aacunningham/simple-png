@@ -72,8 +72,8 @@ PNG {
         },
         Pixel {
             red: 65535,
-            green: 0,
-            blue: 65535,
+            green: 30583,
+            blue: 0,
             alpha: 65535,
         },
         Pixel {

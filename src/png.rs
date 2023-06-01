@@ -94,6 +94,7 @@ impl<'a> PNG<'a, Vec<Pixel>> {
         let mut data = vec![];
         let mut extra_chunks = vec![];
         for chunk in iter_chunks(rest) {
+            log::info!("Found chunk: {:?}", chunk);
             match chunk? {
                 Chunk::IHDR(ihdr) => header = ihdr,
                 Chunk::PLTE(plte) => palette = Some(plte),
@@ -117,6 +118,7 @@ impl<'a> PNG<'a, Vec<Pixel>> {
                 palette.as_ref(),
             )?,
         };
+        log::info!("Processed pixels: {:?}", &pixels[0..8]);
         Ok(PNG {
             header,
             extra_chunks,

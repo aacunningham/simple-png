@@ -3152,8 +3152,8 @@ PNG {
             alpha: 29597,
         },
         Pixel {
-            red: 32382,
-            green: 46309,
+            red: 65535,
+            green: 30582,
             blue: 0,
             alpha: 33825,
         },
@@ -3200,10 +3200,10 @@ PNG {
             alpha: 63421,
         },
         Pixel {
-            red: 65279,
-            green: 30890,
+            red: 0,
+            green: 0,
             blue: 65535,
-            alpha: 14797,
+            alpha: 63421,
         },
         Pixel {
             red: 0,
@@ -3248,10 +3248,10 @@ PNG {
             alpha: 33825,
         },
         Pixel {
-            red: 65279,
-            green: 61473,
-            blue: 1542,
-            alpha: 12299,
+            red: 0,
+            green: 30839,
+            blue: 34694,
+            alpha: 29597,
         },
         Pixel {
             red: 0,

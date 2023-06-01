@@ -1,7 +1,7 @@
 use crate::{
     chunks::{
         ihdr::{ColorType, IHDRChunk},
-        plte::PLTEChunk,
+        plte::{Entry, PLTEChunk},
     },
     scanlines::ScanlineIterator,
 };
@@ -33,16 +33,17 @@ impl Pixel {
     }
 }
 
+#[derive(Debug)]
 struct IndexedPixel(u8);
 impl IndexedPixel {
     fn to_pixel(&self, palette: &PLTEChunk) -> Result<Pixel, anyhow::Error> {
-        let (red, green, blue) = palette
+        let Entry(red, green, blue) = palette
             .get_color(self.0)
             .ok_or(anyhow!("color could not be found in palette"))?;
         Ok(Pixel {
-            red: scale(red as u16, 8),
-            green: scale(green as u16, 8),
-            blue: scale(blue as u16, 8),
+            red: scale(*red as u16, 8),
+            green: scale(*green as u16, 8),
+            blue: scale(*blue as u16, 8),
             alpha: u16::MAX,
         })
     }
@@ -69,6 +70,7 @@ pub(crate) fn parse_scanline_pixels(
         .1
         .into_iter()
         .map(|p| {
+            // log::info!("{:?}", p);
             palette
                 .ok_or(anyhow!("A pLTe chunk is needed for IndexedColor type"))
                 .and_then(|plte| p.to_pixel(plte))

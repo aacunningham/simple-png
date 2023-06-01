@@ -20,7 +20,7 @@ pub(crate) mod plte;
 #[derive(Debug)]
 pub enum Chunk<'a> {
     IHDR(ihdr::IHDRChunk),
-    PLTE(plte::PLTEChunk<'a>),
+    PLTE(plte::PLTEChunk),
     pHYs(phys::pHYsChunk),
     IDAT(idat::IDATChunk<'a>),
     IEND,
