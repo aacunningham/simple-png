@@ -1,2 +1,3 @@
 /target
-/benchmark/*.png
+/png-suite-bench/images
+/png-suite-bench/test_results.json

@@ -7,7 +7,11 @@ use std::{
 };
 
 fn main() -> anyhow::Result<()> {
-    let output_dir = Path::new("benchmark");
+    let output_dir = Path::new("png-suite-bench");
+    let test_image_dir = output_dir.join("images");
+    if !test_image_dir.exists() {
+        fs::create_dir_all(&test_image_dir)?;
+    }
     let test_images = fs::read_dir("tests/png-suite/")
         .context("Failed to read png-suite folder")?
         .filter_map(|entry| entry.ok())
@@ -31,13 +35,13 @@ fn main() -> anyhow::Result<()> {
             .unwrap();
         let orig_name = PathBuf::from(format!("{test_name}-orig.png"));
         let spng_name = PathBuf::from(format!("{test_name}-spng.png"));
-        fs::copy(image_path.clone(), output_dir.join(orig_name.clone())).context(format!(
+        fs::copy(image_path.clone(), test_image_dir.join(orig_name.clone())).context(format!(
             "Failed to copy from {} to {}",
             image_path.to_str().unwrap(),
             orig_name.to_str().unwrap(),
         ))?;
         fs::write(
-            output_dir.join(spng_name),
+            test_image_dir.join(spng_name),
             PNG::decode(&fs::read(image_path.clone())?)
                 .context(format!(
                     "Failed to decode {}.",
