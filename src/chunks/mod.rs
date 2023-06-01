@@ -7,6 +7,8 @@ use nom::{
     IResult,
 };
 
+use self::iend::IENDChunk;
+
 mod crc;
 pub(crate) mod idat;
 pub(crate) mod iend;
@@ -16,13 +18,25 @@ pub(crate) mod plte;
 
 #[allow(non_camel_case_types, clippy::upper_case_acronyms)]
 #[derive(Debug)]
-pub(crate) enum Chunk<'a> {
+pub enum Chunk<'a> {
     IHDR(ihdr::IHDRChunk),
     PLTE(plte::PLTEChunk<'a>),
     pHYs(phys::pHYsChunk),
     IDAT(idat::IDATChunk<'a>),
     IEND,
     Unknown(RawChunk<'a>),
+}
+impl<'a> Chunk<'a> {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        match self {
+            Self::IHDR(chunk) => chunk.to_bytes(),
+            Self::PLTE(chunk) => chunk.to_bytes(),
+            Self::pHYs(chunk) => chunk.to_bytes(),
+            Self::IDAT(chunk) => chunk.to_bytes(),
+            Self::IEND => IENDChunk.to_bytes().to_vec(),
+            Self::Unknown(chunk) => chunk.to_bytes(),
+        }
+    }
 }
 
 pub(crate) fn iter_chunks(source: &[u8]) -> ChunkIter {
@@ -90,9 +104,18 @@ fn parse_chunk(input: &[u8]) -> IResult<&[u8], Chunk<'_>> {
 }
 
 #[derive(Debug)]
-pub(crate) struct RawChunk<'a> {
+pub struct RawChunk<'a> {
     _chunk_type: &'a [u8; 4],
     _chunk_data: &'a [u8],
+}
+impl<'a> RawChunk<'a> {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut data = (self._chunk_data.len() as u32).to_be_bytes().to_vec();
+        data.extend_from_slice(self._chunk_type);
+        data.extend(self._chunk_data);
+        data.extend(crc::calculate_crc(data[4..].iter().copied()).to_be_bytes());
+        data
+    }
 }
 
 fn valid_chunk<'a, Error: nom::error::ParseError<&'a [u8]>>(

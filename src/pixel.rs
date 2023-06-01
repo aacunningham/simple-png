@@ -117,7 +117,6 @@ pub(crate) fn parse_pixels<'a, S: ScanlineIterator<'a>>(
 fn parse_greyscale(bit_depth: u8) -> impl Fn((&[u8], usize)) -> IResult<(&[u8], usize), Pixel> {
     move |(input, bit_offset): (&[u8], usize)| {
         let (rest, intensity) = take_scaled(bit_depth)((input, bit_offset))?;
-
         Ok((
             rest,
             Pixel {

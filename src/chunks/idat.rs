@@ -2,7 +2,7 @@ use super::{crc::calculate_crc, ParseableChunk};
 use nom::IResult;
 
 #[derive(Debug)]
-pub(crate) struct IDATChunk<'a> {
+pub struct IDATChunk<'a> {
     pub(crate) data: &'a [u8],
 }
 impl<'a> ParseableChunk<'a> for IDATChunk<'a> {

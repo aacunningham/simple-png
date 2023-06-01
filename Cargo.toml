@@ -8,6 +8,14 @@ edition = "2021"
 [lib]
 path = "src/lib.rs"
 
+[[bin]]
+name = "process-image"
+path = "src/bin/process_image.rs"
+
+[[bin]]
+name = "visual-bench"
+path = "src/bin/visual_bench.rs"
+
 [dependencies]
 anyhow = "1.0.71"
 miniz_oxide = { version = "0.7.1", features = ["std"] }

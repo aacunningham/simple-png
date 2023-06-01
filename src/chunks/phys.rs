@@ -1,4 +1,4 @@
-use super::ParseableChunk;
+use super::{crc::calculate_crc, ParseableChunk};
 use nom::{
     number::complete::{be_u32, u8},
     sequence::tuple,
@@ -7,7 +7,7 @@ use nom::{
 
 #[allow(non_camel_case_types)]
 #[derive(Debug)]
-pub(crate) struct pHYsChunk {
+pub struct pHYsChunk {
     _x_axis_ppu: u32,
     _y_axis_ppu: u32,
     _unit_specifier: u8,
@@ -47,6 +47,13 @@ impl<'a> ParseableChunk<'a> for pHYsChunk {
     }
 
     fn to_bytes(&self) -> Self::Output {
-        unimplemented!()
+        let mut bytes: Vec<u8> = Vec::with_capacity(21);
+        bytes.extend(&[0, 0, 0, 9]);
+        bytes.extend(Self::HEADER);
+        bytes.extend(&self._x_axis_ppu.to_be_bytes());
+        bytes.extend(&self._y_axis_ppu.to_be_bytes());
+        bytes.push(self._unit_specifier);
+        bytes.extend(calculate_crc(bytes[4..].iter().copied()).to_be_bytes());
+        bytes
     }
 }

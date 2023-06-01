@@ -170,28 +170,94 @@ fn inner_filter_scanlines(
 ) -> usize {
     assert!(image_data.len() % scanline_length == 0);
 
-    // Handle first scanline as special case
-    image_data[0] = Filter::Sub as u8;
-    for i in image_data[1..filter_width + 1].iter_mut() {
-        *i = Filter::Sub.filter(*i, 0, 0, 0);
-    }
-    for i in (filter_width + 1)..scanline_length {
-        image_data[i] = Filter::Sub.filter(image_data[i], image_data[i - filter_width], 0, 0)
-    }
-
-    // Remaining scanlines
-    for i in 1..line_count {
+    // Start from the bottom
+    for i in (1..line_count).rev() {
         image_data[i * scanline_length] = Filter::Sub as u8;
         let (start, stop) = (i * scanline_length + 1, (i + 1) * scanline_length);
         for j in start..(start + filter_width) {
             image_data[j] = Filter::Sub.filter(image_data[j], 0, image_data[j - filter_width], 0);
         }
-        for j in (start + filter_width)..stop {
+        for j in ((start + filter_width)..stop).rev() {
             let a = image_data[j - filter_width];
             let b = image_data[j - scanline_length];
             let c = image_data[j - filter_width - scanline_length];
             image_data[j] = Filter::Sub.filter(image_data[j], a, b, c);
         }
     }
+
+    // "First" scanline can be treated differently
+    for i in ((filter_width + 1)..scanline_length).rev() {
+        image_data[i] = Filter::Sub.filter(image_data[i], image_data[i - filter_width], 0, 0)
+    }
+    // Special case for the first pixel/byte.
+    image_data[0] = Filter::Sub as u8;
+    for i in image_data[1..filter_width + 1].iter_mut() {
+        *i = Filter::Sub.filter(*i, 0, 0, 0);
+    }
     scanline_length * line_count
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{inner_filter_scanlines, inner_reconstruct_scanlines};
+
+    #[test]
+    fn reconstruct_undoes_filter() {
+        let data = &mut [
+            1, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 1,
+            0, 0, 0, 0, 0, 0, 255, 255, 0, 0, 0, 0, 0, 0, 255, 255,
+        ];
+        let orig_copy = data.clone();
+        inner_filter_scanlines(data, 17, 2, 8);
+        assert_eq!(
+            data,
+            &[
+                1, 255, 255, 255, 255, 255, 255, 255, 255, 0, 0, 0, 0, 0, 0, 0,
+                0, // End scanline
+                1, 0, 0, 0, 0, 0, 0, 255, 255, 0, 0, 0, 0, 0, 0, 0, 0,
+            ]
+        );
+        inner_reconstruct_scanlines(data, 17, 2, 8);
+        assert_eq!(data, &orig_copy);
+    }
+
+    #[test]
+    fn real_test() {
+        let data = &mut [
+            1, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 0, 0, 0, 0, 0, 255, 255, 1, 255,
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            255, 0, 0, 0, 0, 0, 0, 255, 255, 0, 0, 0, 0, 0, 0, 255, 255,
+        ];
+        let orig_copy = data.clone();
+        inner_filter_scanlines(data, 257, 2, 8);
+        inner_reconstruct_scanlines(data, 257, 2, 8);
+        assert_eq!(data, &orig_copy);
+    }
 }

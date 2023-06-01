@@ -3,7 +3,7 @@ use nom::IResult;
 
 #[allow(non_camel_case_types)]
 #[derive(Debug)]
-pub(crate) struct PLTEChunk<'a> {
+pub struct PLTEChunk<'a> {
     colors: &'a [u8],
 }
 impl PLTEChunk<'_> {
