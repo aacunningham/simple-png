@@ -11,7 +11,7 @@ macro_rules! png_suite {
             #[test]
             fn $file() {
                 let input = std::fs::read(concat!(
-                    "tests/decoding/png-suite/",
+                    "tests/png-suite/",
                     stringify!($file),
                     ".png"
                 ))
