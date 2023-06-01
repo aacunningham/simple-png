@@ -12,6 +12,81 @@ PNG {
         filter_method: 0,
         interlace_method: None,
     },
+    extra_chunks: [
+        Unknown(
+            RawChunk {
+                _chunk_type: [
+                    103,
+                    65,
+                    77,
+                    65,
+                ],
+                _chunk_data: [
+                    0,
+                    1,
+                    134,
+                    160,
+                ],
+            },
+        ),
+        Unknown(
+            RawChunk {
+                _chunk_type: [
+                    115,
+                    66,
+                    73,
+                    84,
+                ],
+                _chunk_data: [
+                    4,
+                    4,
+                    4,
+                ],
+            },
+        ),
+        Unknown(
+            RawChunk {
+                _chunk_type: [
+                    104,
+                    73,
+                    83,
+                    84,
+                ],
+                _chunk_data: [
+                    0,
+                    64,
+                    0,
+                    112,
+                    0,
+                    48,
+                    0,
+                    96,
+                    0,
+                    96,
+                    0,
+                    32,
+                    0,
+                    32,
+                    0,
+                    80,
+                    0,
+                    16,
+                    0,
+                    128,
+                    0,
+                    64,
+                    0,
+                    16,
+                    0,
+                    48,
+                    0,
+                    80,
+                    0,
+                    112,
+                ],
+            },
+        ),
+    ],
     pixels: [
         Pixel {
             red: 65535,

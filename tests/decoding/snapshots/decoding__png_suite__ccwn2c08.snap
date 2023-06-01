@@ -1,6 +1,6 @@
 ---
 source: tests/decoding/main.rs
-expression: png
+expression: "PNG::decode(&input).unwrap()"
 ---
 PNG {
     header: IHDRChunk {
@@ -12,6 +12,68 @@ PNG {
         filter_method: 0,
         interlace_method: None,
     },
+    extra_chunks: [
+        Unknown(
+            RawChunk {
+                _chunk_type: [
+                    103,
+                    65,
+                    77,
+                    65,
+                ],
+                _chunk_data: [
+                    0,
+                    1,
+                    134,
+                    160,
+                ],
+            },
+        ),
+        Unknown(
+            RawChunk {
+                _chunk_type: [
+                    99,
+                    72,
+                    82,
+                    77,
+                ],
+                _chunk_data: [
+                    0,
+                    0,
+                    122,
+                    38,
+                    0,
+                    0,
+                    128,
+                    132,
+                    0,
+                    0,
+                    250,
+                    0,
+                    0,
+                    0,
+                    128,
+                    232,
+                    0,
+                    0,
+                    117,
+                    48,
+                    0,
+                    0,
+                    234,
+                    96,
+                    0,
+                    0,
+                    58,
+                    152,
+                    0,
+                    0,
+                    23,
+                    112,
+                ],
+            },
+        ),
+    ],
     pixels: [
         Pixel {
             red: 65535,

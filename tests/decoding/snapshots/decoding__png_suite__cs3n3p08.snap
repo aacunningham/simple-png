@@ -12,6 +12,39 @@ PNG {
         filter_method: 0,
         interlace_method: None,
     },
+    extra_chunks: [
+        Unknown(
+            RawChunk {
+                _chunk_type: [
+                    103,
+                    65,
+                    77,
+                    65,
+                ],
+                _chunk_data: [
+                    0,
+                    1,
+                    134,
+                    160,
+                ],
+            },
+        ),
+        Unknown(
+            RawChunk {
+                _chunk_type: [
+                    115,
+                    66,
+                    73,
+                    84,
+                ],
+                _chunk_data: [
+                    3,
+                    3,
+                    3,
+                ],
+            },
+        ),
+    ],
     pixels: [
         Pixel {
             red: 56283,
