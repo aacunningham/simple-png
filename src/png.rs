@@ -91,6 +91,7 @@ impl<'a> PNG<'a, Vec<Pixel>> {
             .or(Err(anyhow!("Data doesn't start with expected signature")))?;
         let mut header = IHDRChunk::default();
         let mut palette = None;
+        let mut transparency = None;
         let mut data = vec![];
         let mut extra_chunks = vec![];
         for chunk in iter_chunks(rest) {
@@ -98,6 +99,7 @@ impl<'a> PNG<'a, Vec<Pixel>> {
             match chunk? {
                 Chunk::IHDR(ihdr) => header = ihdr,
                 Chunk::PLTE(plte) => palette = Some(plte),
+                Chunk::tRNS(trns) => transparency = Some(trns),
                 Chunk::IDAT(idat) => data.extend(idat.data),
                 Chunk::IEND => break,
                 c => extra_chunks.push(c),
@@ -111,14 +113,16 @@ impl<'a> PNG<'a, Vec<Pixel>> {
                 NormalScanline::new(&decompressed_data, &header),
                 &header,
                 palette.as_ref(),
+                transparency.as_ref(),
             )?,
             Interlacing::Adam7 => parse_pixels(
                 Adam7ScanlineIter::new(&decompressed_data, &header),
                 &header,
                 palette.as_ref(),
+                transparency.as_ref(),
             )?,
         };
-        log::info!("Processed pixels: {:?}", &pixels[0..8]);
+        log::info!("Processed pixels: {:?}", &pixels[0..header.width as usize]);
         Ok(PNG {
             header,
             extra_chunks,

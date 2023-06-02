@@ -2,6 +2,7 @@ use crate::{
     chunks::{
         ihdr::{ColorType, IHDRChunk},
         plte::{Entry, PLTEChunk},
+        trns::tRNSChunk,
     },
     scanlines::ScanlineIterator,
 };
@@ -36,7 +37,11 @@ impl Pixel {
 #[derive(Debug)]
 struct IndexedPixel(u8);
 impl IndexedPixel {
-    fn to_pixel(&self, palette: &PLTEChunk) -> Result<Pixel, anyhow::Error> {
+    fn to_pixel(
+        &self,
+        palette: &PLTEChunk,
+        transparency: Option<&tRNSChunk>,
+    ) -> Result<Pixel, anyhow::Error> {
         let Entry(red, green, blue) = palette
             .get_color(self.0)
             .ok_or(anyhow!("color could not be found in palette"))?;
@@ -44,7 +49,7 @@ impl IndexedPixel {
             red: scale(*red as u16, 8),
             green: scale(*green as u16, 8),
             blue: scale(*blue as u16, 8),
-            alpha: u16::MAX,
+            alpha: transparency.map_or(u16::MAX, |trns| scale(trns.as_palette(self.0).into(), 8)),
         })
     }
 }
@@ -54,12 +59,15 @@ pub(crate) fn parse_scanline_pixels(
     color_type: ColorType,
     bit_depth: u8,
     palette: Option<&PLTEChunk>,
+    transparency: Option<&tRNSChunk>,
 ) -> anyhow::Result<Vec<Pixel>> {
     let pixels = match color_type {
         ColorType::Greyscale => {
-            bits::<_, _, Error<(&[u8], usize)>, Error<&[u8]>, _>(many0(parse_greyscale(bit_depth)))(
-                &scanline[1..],
-            )
+            let transparent = transparency.map(tRNSChunk::as_greyscale);
+            bits::<_, _, Error<(&[u8], usize)>, Error<&[u8]>, _>(many0(parse_greyscale(
+                bit_depth,
+                transparent,
+            )))(&scanline[1..])
             .map_err(|e| e.to_owned())?
             .1
         }
@@ -73,7 +81,7 @@ pub(crate) fn parse_scanline_pixels(
             // log::info!("{:?}", p);
             palette
                 .ok_or(anyhow!("A pLTe chunk is needed for IndexedColor type"))
-                .and_then(|plte| p.to_pixel(plte))
+                .and_then(|plte| p.to_pixel(plte, transparency))
         })
         .collect::<anyhow::Result<Vec<_>>>()?,
         ColorType::GreyscaleWithAlpha => {
@@ -84,9 +92,11 @@ pub(crate) fn parse_scanline_pixels(
             .1
         }
         ColorType::Truecolor => {
-            bits::<_, _, Error<(&[u8], usize)>, Error<&[u8]>, _>(many0(parse_truecolor(bit_depth)))(
-                &scanline[1..],
-            )
+            let transparent_sample = transparency.map(tRNSChunk::as_truecolor);
+            bits::<_, _, Error<(&[u8], usize)>, Error<&[u8]>, _>(many0(parse_truecolor(
+                bit_depth,
+                transparent_sample,
+            )))(&scanline[1..])
             .map_err(|e| e.to_owned())?
             .1
         }
@@ -105,10 +115,17 @@ pub(crate) fn parse_pixels<'a, S: ScanlineIterator<'a>>(
     iterator: S,
     header: &IHDRChunk,
     palette: Option<&PLTEChunk>,
+    transparency: Option<&tRNSChunk>,
 ) -> anyhow::Result<Vec<Pixel>> {
     let mut total = vec![Pixel::default(); header.width as usize * header.height as usize];
     for (scanline, pixel_indices) in iterator {
-        let pixels = parse_scanline_pixels(scanline, header.color_type, header.bit_depth, palette)?;
+        let pixels = parse_scanline_pixels(
+            scanline,
+            header.color_type,
+            header.bit_depth,
+            palette,
+            transparency,
+        )?;
         for (index, pixel) in pixel_indices.into_iter().zip(pixels.into_iter()) {
             total[index] = pixel;
         }
@@ -116,16 +133,26 @@ pub(crate) fn parse_pixels<'a, S: ScanlineIterator<'a>>(
     Ok(total)
 }
 
-fn parse_greyscale(bit_depth: u8) -> impl Fn((&[u8], usize)) -> IResult<(&[u8], usize), Pixel> {
+fn parse_greyscale(
+    bit_depth: u8,
+    transparent: Option<u16>,
+) -> impl Fn((&[u8], usize)) -> IResult<(&[u8], usize), Pixel> {
     move |(input, bit_offset): (&[u8], usize)| {
-        let (rest, intensity) = take_scaled(bit_depth)((input, bit_offset))?;
+        let (rest, intensity) = take(bit_depth)((input, bit_offset))?;
+        let alpha = transparent.map_or(u16::MAX, |transparent| {
+            if intensity == transparent {
+                0
+            } else {
+                u16::MAX
+            }
+        });
         Ok((
             rest,
             Pixel {
-                red: intensity,
-                green: intensity,
-                blue: intensity,
-                alpha: u16::MAX,
+                red: scale(intensity, bit_depth),
+                green: scale(intensity, bit_depth),
+                blue: scale(intensity, bit_depth),
+                alpha,
             },
         ))
     }
@@ -159,21 +186,28 @@ fn parse_greyscale_with_alpha(
     }
 }
 
-fn parse_truecolor(bit_depth: u8) -> impl Fn((&[u8], usize)) -> IResult<(&[u8], usize), Pixel> {
+fn parse_truecolor(
+    bit_depth: u8,
+    transparent: Option<(u16, u16, u16)>,
+) -> impl Fn((&[u8], usize)) -> IResult<(&[u8], usize), Pixel> {
     move |(input, bit_offset): (&[u8], usize)| {
-        let (rest, (red, green, blue)) = tuple((
-            take_scaled(bit_depth),
-            take_scaled(bit_depth),
-            take_scaled(bit_depth),
-        ))((input, bit_offset))?;
+        let (rest, (red, green, blue)) =
+            tuple((take(bit_depth), take(bit_depth), take(bit_depth)))((input, bit_offset))?;
 
+        let alpha = transparent.map_or(u16::MAX, |samples| {
+            if (red, green, blue) == samples {
+                0
+            } else {
+                u16::MAX
+            }
+        });
         Ok((
             rest,
             Pixel {
-                red,
-                green,
-                blue,
-                alpha: u16::MAX,
+                red: scale(red, bit_depth),
+                green: scale(green, bit_depth),
+                blue: scale(blue, bit_depth),
+                alpha,
             },
         ))
     }

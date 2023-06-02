@@ -15,6 +15,7 @@ pub(crate) mod iend;
 pub(crate) mod ihdr;
 mod phys;
 pub(crate) mod plte;
+pub(crate) mod trns;
 
 #[allow(non_camel_case_types, clippy::upper_case_acronyms)]
 #[derive(Debug)]
@@ -23,6 +24,7 @@ pub enum Chunk<'a> {
     PLTE(plte::PLTEChunk),
     pHYs(phys::pHYsChunk),
     IDAT(idat::IDATChunk<'a>),
+    tRNS(trns::tRNSChunk<'a>),
     IEND,
     Unknown(RawChunk<'a>),
 }
@@ -33,6 +35,7 @@ impl<'a> Chunk<'a> {
             Self::PLTE(chunk) => chunk.to_bytes(),
             Self::pHYs(chunk) => chunk.to_bytes(),
             Self::IDAT(chunk) => chunk.to_bytes(),
+            Self::tRNS(chunk) => chunk.to_bytes(),
             Self::IEND => IENDChunk.to_bytes().to_vec(),
             Self::Unknown(chunk) => chunk.to_bytes(),
         }
@@ -91,6 +94,10 @@ fn parse_chunk(input: &[u8]) -> IResult<&[u8], Chunk<'_>> {
         idat::IDATChunk::HEADER => Ok((
             rest,
             Chunk::IDAT(idat::IDATChunk::from_bytes(chunk_data)?.1),
+        )),
+        trns::tRNSChunk::HEADER => Ok((
+            rest,
+            Chunk::tRNS(trns::tRNSChunk::from_bytes(chunk_data)?.1),
         )),
         iend::IENDChunk::HEADER => Ok((rest, Chunk::IEND)),
         _ => Ok((
