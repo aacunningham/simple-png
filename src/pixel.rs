@@ -16,14 +16,24 @@ use nom::{
     IResult,
 };
 
+/// A Pixel of an image.
+///
+/// Currently the struct offers the highest possible precision PNG supports, RGB + alpha at 16 bit
+/// depth. This should hopefully be replaced with an enum that captures the different variations
+/// of pixel types.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
 pub struct Pixel {
-    pub(crate) red: u16,
-    pub(crate) green: u16,
-    pub(crate) blue: u16,
-    pub(crate) alpha: u16,
+    /// The red channel of the Pixel. For greyscale images, this will equal both green and blue.
+    pub red: u16,
+    /// The green channel of the Pixel. For greyscale images, this will equal both red and blue.
+    pub green: u16,
+    /// The blue channel of the Pixel. For greyscale images, this will equal both green and red.
+    pub blue: u16,
+    /// The alpha channel of the Pixel. For images without transparency, this will be u16::MAX.
+    pub alpha: u16,
 }
 impl Pixel {
+    /// Construct a new Pixel from its parts.
     pub fn new(red: u16, green: u16, blue: u16, alpha: u16) -> Self {
         Self {
             red,

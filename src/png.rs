@@ -17,13 +17,17 @@ fn parse_signature(input: &[u8]) -> IResult<&[u8], &[u8]> {
     tag(b"\x89PNG\x0d\x0a\x1a\x0a")(input)
 }
 
+/// A PNG image, broken down and interpreted.
 #[derive(Debug)]
 pub struct PNG<'a, T>
 where
     T: AsRef<[Pixel]>,
 {
+    /// The IHDR metadata for the image
     pub header: IHDRChunk,
+    /// Any PNG chunks that the library doesn't interpret.
     pub extra_chunks: Vec<Chunk<'a>>,
+    /// A collection of pixels. Top left is 0 and bottom right is width * height - 1.
     pub pixels: T,
 }
 
@@ -31,6 +35,10 @@ impl<'a, T> PNG<'a, T>
 where
     T: AsRef<[Pixel]>,
 {
+    /// Construct an image with just the base dimensions and a collection of pixels.
+    ///
+    /// The pixel collection should have a length of at least height * width, anything after
+    /// that is ignored.
     pub fn new(height: u32, width: u32, pixels: T) -> Self {
         let ihdr = IHDRChunk {
             height,
@@ -48,6 +56,7 @@ where
         }
     }
 
+    /// Encodes the PNG into bytes that can then be saved to disk or transferred over network.
     pub fn encode(&self) -> Vec<u8> {
         let header = IHDRChunk {
             height: self.header.height,
@@ -84,8 +93,9 @@ where
         png_data
     }
 }
-
 impl<'a> PNG<'a, Vec<Pixel>> {
+    /// Decodes a series of bytes as a PNG, returning an error if a problem was found with the
+    /// data.
     pub fn decode(bytes: &'a [u8]) -> anyhow::Result<Self> {
         let (rest, _) = parse_signature(bytes)
             .or(Err(anyhow!("Data doesn't start with expected signature")))?;
